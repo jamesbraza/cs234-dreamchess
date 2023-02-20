@@ -18,13 +18,11 @@ score = false
 disable = [
     "missing-docstring",  # Let pep257 take care of docstrings
     "empty-docstring",  # Let pep257 take care of docstrings
-    "docstring-first-line-empty",  # Multiline docstrings have empty first line
     "too-few-public-methods",  # Don't care for this level of linting
     "too-many-ancestors",  # hw makes heavy use of inheritance
     "fixme",  # codetags are useful
     "too-many-arguments",  # Don't care to enforce this
-    "no-self-use",  # Don't care to enforce this
-    "while-used",  # Don't care to enforce this
+    "invalid-name",  # Don't care to enforce this
     "wrong-import-order",  # Rely on isort for this
     "ungrouped-imports",  # Rely on isort for this
     "unused-wildcard-import",  # Wildcard imports are convenient
