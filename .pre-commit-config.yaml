@@ -1,0 +1,84 @@
+---
+default_language_version:
+  python: python3
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: check-docstring-first
+        description: Checks for code placed before a docstring.
+      - id: check-merge-conflict
+      - id: check-symlinks
+      - id: check-toml
+      - id: check-yaml
+      - id: end-of-file-fixer
+        description: Makes sure files end in a newline and only a newline.
+      - id: mixed-line-ending
+        description: >-
+          Replaces mixed line ending automatically with the most frequent line
+          ending.
+      - id: pretty-format-json
+        args: ["--autofix", "--no-sort-keys"]
+      - id: requirements-txt-fixer
+        description: >-
+          Sorts entries in requirements.txt and removes incorrect entry for
+          `pkg-resources==0.0.0`.
+        files: ^requirements\S*\.(in|txt)$
+      - id: trailing-whitespace
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.29.0
+    hooks:
+      - id: yamllint
+        types: [file]
+        # SEE: https://regex101.com/r/ydseiS/4
+        files: \.(ya?ml(lint)?|cff)$
+        args: ["--strict"]
+  - repo: https://github.com/myint/docformatter
+    rev: v1.5.1
+    hooks:
+      - id: docformatter
+        name: Autoformat docstrings
+        args:
+          - "--in-place"
+          - "--pre-summary-newline"
+          - "--pre-summary-space"  # Match black
+          - "--wrap-descriptions=88"  # Match black
+          - "--wrap-summaries=88"  # Match black
+  - repo: https://github.com/myint/rstcheck
+    rev: v6.1.1
+    hooks:
+      - id: rstcheck
+  - repo: https://github.com/pycqa/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+        args: ["--profile=black"]
+  - repo: https://github.com/psf/black
+    rev: 23.1.0
+    hooks:
+      - id: black
+  - repo: https://github.com/PyCQA/autoflake
+    rev: v2.0.1
+    hooks:
+      - id: autoflake
+        args:
+          - "--remove-all-unused-imports"
+          - "--remove-rhs-for-unused-variables"
+          - "--remove-unused-variables"
+  - repo: https://github.com/pycqa/flake8
+    rev: 6.0.0
+    hooks:
+      - id: flake8
+        additional_dependencies:
+          - flake8-bugbear
+          - flake8-docstrings
+          - Flake8-pyproject
+          - flake8-simplify
+  - repo: https://github.com/executablebooks/mdformat
+    rev: 0.7.16
+    hooks:
+      - id: mdformat
+        additional_dependencies:
+          - mdformat-gfm
+          - mdformat-black
