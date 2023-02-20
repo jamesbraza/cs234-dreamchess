@@ -80,8 +80,10 @@ repos:
     hooks:
       - id: mdformat
         additional_dependencies:
-          - mdformat-gfm
           - mdformat-black
+          - mdformat-footnote
+          - mdformat-frontmatter
+          - mdformat-gfm
   - repo: https://github.com/codespell-project/codespell
     rev: v2.2.2
     hooks:
