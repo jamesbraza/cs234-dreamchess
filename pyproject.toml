@@ -1,0 +1,134 @@
+[tool.pylint]
+# SEE: https://github.com/PyCQA/pylint/blob/master/examples/pylintrc
+
+[tool.pylint.master]
+
+# Use multiple processes to speed up Pylint. Specifying 0 will auto-detect the
+# number of processors available to use.
+jobs = 0
+
+[tool.pylint.reports]
+
+# Set true to activate the evaluation score.
+score = false
+
+[tool.pylint.messages_control]
+
+# Disable the message, report, category or checker with the given id(s).
+disable = [
+    "missing-docstring",  # Let pep257 take care of docstrings
+    "empty-docstring",  # Let pep257 take care of docstrings
+    "docstring-first-line-empty",  # Multiline docstrings have empty first line
+    "too-few-public-methods",  # Don't care for this level of linting
+    "too-many-ancestors",  # hw makes heavy use of inheritance
+    "fixme",  # codetags are useful
+    "too-many-arguments",  # Don't care to enforce this
+    "no-self-use",  # Don't care to enforce this
+    "while-used",  # Don't care to enforce this
+    "wrong-import-order",  # Rely on isort for this
+    "ungrouped-imports",  # Rely on isort for this
+    "unused-wildcard-import",  # Wildcard imports are convenient
+    "wildcard-import",  # Wildcard imports are convenient
+    "unsubscriptable-object",  # Buggy, SEE: https://github.com/PyCQA/pylint/issues/3637
+    "logging-fstring-interpolation",  # f-strings are convenient
+]
+
+# Enable the message, report, category or checker with the given id(s).
+enable = [
+    "useless-suppression",  # Print unused `pylint: disable` comments
+]
+
+[tool.pylint.format]
+
+# Maximum number of characters on a single line.
+max-line-length = 120
+
+
+[tool.mypy]
+# SEE: http://mypy.readthedocs.io/en/latest/config_file.html#config-file
+
+# Specifies the Python version used to parse and check the target program.
+python_version = "3.10"
+
+# Warns about casting an expression to its inferred type.
+warn_redundant_casts = true
+
+# Warns about unneeded `# type: ignore` comments.
+warn_unused_ignores = true
+
+# Shows a warning when encountering any code inferred to be unreachable or
+# redundant after performing type analysis.
+warn_unreachable = true
+
+# Warns about per-module sections in the config file that do not match any
+# files processed when invoking mypy.
+warn_unused_configs = true
+
+# Prefixes each error with the relevant context.
+show_error_context = true
+
+# Shows error codes in error messages.
+# SEE: https://mypy.readthedocs.io/en/stable/error_codes.html#error-codes
+show_error_codes = true
+
+# Shows column numbers in error messages.
+show_column_numbers = true
+
+# Enables PEP 420 style namespace packages.
+namespace_packages = true
+
+# Use visually nicer output in error messages: use soft word wrap, show source
+# code snippets, and show error location markers.
+pretty = true
+
+# Shows a short summary line after error messages.
+error_summary = false
+
+
+[tool.flake8]
+# SEE: https://flake8.pycqa.org/en/latest/user/options.html
+# SEE: http://www.pydocstyle.org/en/stable/usage.html#configuration-files
+# SEE: https://github.com/john-hen/Flake8-pyproject
+
+# Set the maximum length that any line (with some exceptions) may be.
+max-line-length = 120
+
+# Specify a list of codes to ignore. The list is expected to be
+# comma-separated, and does not need to specify an error code exactly.
+# D100, D101, D102, D103, D104, D105, D106, D107: don't always need docstrings
+ignore = [
+    "D100",
+    "D101",
+    "D102",
+    "D103",
+    "D104",
+    "D105",
+    "D106",
+    "D107",
+    "D203",  # Keep docstring next to the class definition (covered by D211)
+    "D213",  # Summary should be on first line (covered by D212)
+    "D402",  # It's nice to reuse the method name
+    "D406",  # Google style requires ":" at end
+    "D407",  # We aren't using numpy style
+    "D413",  # Blank line after last section. -> No blank line
+    "F403",  # Wildcard imports are convenient
+    "F405",  # Wildcard imports are convenient
+    "W503",  # Goes against PEP8 line break before binary operator
+]
+
+# Specify a list of codes to add to the list of ignored ones. Similar
+# considerations as in --ignore apply here with regard to the value.
+# The difference to the --ignore option is, that this option can be used to
+# selectively add individual codes without overriding the default list entirely.
+extend-ignore = [
+    "E203",  # SEE: https://black.readthedocs.io/en/stable/the_black_code_style/current_style.html#slices
+    "E501",  # SEE: https://black.readthedocs.io/en/stable/the_black_code_style/current_style.html#line-length
+]
+
+# Enable PyFlakes syntax checking of doctests in docstrings.
+doctests = true
+
+# Set the maximum allowed McCabe complexity value for a block of code.
+# SEE: https://github.com/PyCQA/mccabe#plugin-for-flake8
+# > According to McCabe, anything that goes beyond 10 is too complex.
+max-complexity = 10
