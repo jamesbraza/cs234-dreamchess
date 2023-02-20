@@ -42,7 +42,6 @@ repos:
         args:
           - "--in-place"
           - "--pre-summary-newline"
-          - "--pre-summary-space"  # Match black
           - "--wrap-descriptions=88"  # Match black
           - "--wrap-summaries=88"  # Match black
   - repo: https://github.com/myint/rstcheck
