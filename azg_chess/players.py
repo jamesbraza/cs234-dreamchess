@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 import chess
+import chess.engine
 import numpy as np
 import numpy.typing as npt
 
@@ -49,7 +50,7 @@ class Player(ABC):
 
 
 class RandomPlayer(Player):
-    """A random player randomly selects a valid action."""
+    """Player that randomly selects a valid action."""
 
     DEFAULT_SEED = 42
 
@@ -65,7 +66,7 @@ class RandomPlayer(Player):
 
 
 class HumanChessPlayer(Player):
-    """Human players choose actions based on a user inputting a UCI string."""
+    """Player that chooses an action based on user input of a UCI string."""
 
     def act(self, board: Board) -> ActionIndex:
         while True:
@@ -76,3 +77,33 @@ class HumanChessPlayer(Player):
             except chess.InvalidMoveError:
                 print(f"Invalid UCI {uci_input}.")
         return to_action(move)
+
+
+class StockfishPlayer(Player):
+    """
+    Player whose decisions are made by the Stockfish chess engine.
+
+    NOTE: development was done with Stockfish 15.1.
+    SEE: https://stockfishchess.org/
+    """
+
+    # NOTE: this is the path for macOS after `brew install stockfish`
+    DEFAULT_STOCKFISH_PATH = "/opt/homebrew/bin/stockfish"
+
+    def __init__(
+        self,
+        game: ChessGame,
+        player_id: PlayerID = PLAYER_1,
+        stockfish_path: str = DEFAULT_STOCKFISH_PATH,
+    ):
+        super().__init__(game, player_id)
+        self._engine = chess.engine.SimpleEngine.popen_uci(stockfish_path)
+
+    def act(self, board: Board) -> ActionIndex:
+        # SEE: https://python-chess.readthedocs.io/en/latest/engine.html#playing
+        result = self._engine.play(board, limit=chess.engine.Limit(time=0.1))
+        assert result.move is not None, "Stockfish didn't pick a best move."
+        return to_action(result.move)
+
+    def __del__(self) -> None:
+        self._engine.close()
