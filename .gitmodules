@@ -1,0 +1,3 @@
+[submodule "azg"]
+	path = azg
+	url = https://github.com/suragnair/alpha-zero-general
