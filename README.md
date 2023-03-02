@@ -38,6 +38,10 @@ Stated with regex-like notation,
 movetext is governed by `ab.(c?d?e|O-O|O-O-O|e=f)`:
 
 1. `a`: player, either white `W` or black `B`.
+   - Note: in Forsyth–Edwards Notation (FEN) notation,
+     used by the `chess` library,
+     white pieces are designated with capital letters,
+     and black pieces are designated with lowercase letters.
 1. `b`: one-indexed turn number.
 1. `.`: separator.
 
