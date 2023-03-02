@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, TypeAlias
 
 import chess
@@ -8,33 +9,33 @@ import numpy as np
 from azg.Game import Game
 
 if TYPE_CHECKING:
-    import numpy.typing as npt
-
     from azg_chess.players import Player
 
 BOARD_DIMENSIONS = (8, 8)
-NUM_SQUARES = len(chess.SQUARES)
+NUM_SQUARES = len(chess.SQUARES)  # 64
 ACTION_INDICES = np.arange(NUM_SQUARES**2, dtype=int).reshape(NUM_SQUARES, -1)
-
-# Just FYI
-AZ_PAPER_ACTION_SPACE_SIZE = 64 * 73
-# SEE: https://ai.stackexchange.com/a/34733
-NORMAL_CASE_ACTION_SPACE_SIZE = 1924
+_FIRST_ROW = range(chess.A2)
 
 Board: TypeAlias = chess.Board
 ActionIndex: TypeAlias = int
 PlayerID: TypeAlias = int
-PLAYER_1 = 1
-PLAYER_2 = -1
+WHITE_PLAYER: PlayerID = 1  # White
+BLACK_PLAYER: PlayerID = -1  # Black
+State: TypeAlias = tuple[Board, PlayerID]
+Policy: TypeAlias = Sequence[float]
 
 
-def to_action(uci: str | chess.Move) -> ActionIndex:
+def move_to_action(move: str | chess.Move) -> ActionIndex:
     """Convert a Universal Chess Interface (UCI) string or Move to an action."""
-    if isinstance(uci, chess.Move):
-        uci: str = uci.uci()
-    origin_index = chess.SQUARE_NAMES.index(uci[0:2])
-    destination_index = chess.SQUARE_NAMES.index(uci[2:4])
-    return ACTION_INDICES[origin_index, destination_index]
+    if isinstance(move, str):
+        move = chess.Move.from_uci(move)
+    return move.from_square * NUM_SQUARES + move.to_square
+
+
+def action_to_move(action: ActionIndex) -> chess.Move:
+    return chess.Move(
+        from_square=int(action / NUM_SQUARES), to_square=action % NUM_SQUARES
+    )
 
 
 class ChessGame(Game):
@@ -42,10 +43,13 @@ class ChessGame(Game):
 
     def __init__(self, player_1: Player, player_2: Player):
         super().__init__()
-        self.players: dict[PlayerID, Player] = {PLAYER_1: player_1, PLAYER_2: player_2}
+        self.players: dict[PlayerID, Player] = {
+            WHITE_PLAYER: player_1,
+            BLACK_PLAYER: player_2,
+        }
 
     def getInitBoard(self) -> Board:
-        """Get a board representation."""
+        """Get a board representation at the start of a match."""
         return chess.Board()
 
     def getBoardSize(self) -> tuple[int, int]:
@@ -54,39 +58,35 @@ class ChessGame(Game):
 
     def getActionSize(self) -> int:
         """Get the size of the action space |A|."""
+        # AlphaGo Zero used (8x8)x73
+        # Best case is 1924, SEE: https://ai.stackexchange.com/a/34733
         return math.prod(ACTION_INDICES.shape)
 
     def getNextState(
         self, board: Board, player: PlayerID, action: ActionIndex
-    ) -> tuple[Board, PlayerID]:
-        b = board.copy()  # TODO: is this necessary?
+    ) -> State:
+        move = action_to_move(action)
+        if (
+            board.piece_at(move.from_square).piece_type == chess.PAWN
+            and chess.square_rank(move.to_square) in _FIRST_ROW
+        ):
+            move.promotion = chess.QUEEN  # Assume always queening
+        board.push(move=move)
+        return board, -1 * player
 
-        origin_index = np.where(ACTION_INDICES == action)[0][0]
-        destination_index = np.where(ACTION_INDICES == action)[1][0]
-
-        uci = f"{chess.square_name(origin_index)}{chess.square_name(destination_index)}"
-        # TODO: verify this, and need expanding?
-        if b.piece_at(origin_index).piece_type == chess.PAWN and chess.square_rank(
-            destination_index
-        ) in [0, 7]:
-            uci += "q"  # Promotion
-
-        b.push(move=chess.Move.from_uci(uci))
-        return b.mirror(), -1 * player  # TODO: why mirror?
-
-    def getValidMoves(self, board: Board, player: PlayerID) -> npt.NDArray[bool]:
+    def getValidMoves(self, board: Board, player: PlayerID) -> Sequence[bool]:
         """
         Get a vector that identifies moves as invalid False or valid True.
 
         Args:
             board: Current board.
-            player: Current player ID.
+            player: ID of the player who needs to move.
 
         Returns:
             Vector of size self.getActionSize() where each element is a
                 False (invalid move) or True (valid move).
         """
-        return self.players[player].get_valid_moves(board)
+        return self.players[player].get_moves(board)
 
     UNFINISHED_REWARD = 0
     WON_REWARD = 1
@@ -95,23 +95,62 @@ class ChessGame(Game):
 
     def getGameEnded(self, board: Board, player: PlayerID) -> float:
         """Get the current reward associated with the board and player."""
-        # TODO: use player?
         result: str = board.result()
         if result == "*":
             return self.UNFINISHED_REWARD
-        player_outcome = result.split("-")[0]
-        if player_outcome == "1":
-            return self.WON_REWARD
-        if player_outcome == "0":
-            return self.LOST_REWARD
-        assert player_outcome == "1/2"  # Confirm no other possibilities
+        white_player_outcome = result.split("-")[0]
+        match player == WHITE_PLAYER, white_player_outcome == "1", white_player_outcome == "0":
+            case (True, True, _) | (False, _, True):
+                return self.WON_REWARD
+            case (True, _, True) | (False, True, _):
+                return self.LOST_REWARD
+        assert white_player_outcome == "1/2"  # Confirm no other possibilities
         return self.DRAW_REWARD
 
-    def getCanonicalForm(self, board: Board, player: PlayerID):
-        raise NotImplementedError
+    def getCanonicalForm(self, board: Board, player: PlayerID) -> Board:
+        """
+        Get a player-independent ("canonical") representation of the board.
 
-    def getSymmetries(self, board: Board, pi):
-        raise NotImplementedError
+        When you play chess, you view the board from one angle (player's point
+        of view).  The canonical form is the board, as viewed by the player.
+        For chess, the canonical form is from white player's point of view.
+        If the black player is moving, invert the colors and flip vertically.
+
+        Args:
+            board: Current board.
+            player: ID of the player who needs to move.
+
+        Returns:
+            Canonical form of the board.
+        """
+        if player == BLACK_PLAYER:
+            board.apply_mirror()  # Mirror vertically, swap piece colors, etc.
+        return board  # NOTE: this is not a copy
+
+    def getSymmetries(self, board: Board, pi: Policy) -> list[tuple[Board, Policy]]:
+        """
+        Get symmetrical board representations to expand training data.
+
+        Args:
+            board: Current board.
+            pi: Policy vector of size self.getActionSize().
+
+        Returns:
+            List of tuples of symmetrical board, corresponding policy.
+        """
+        if not isinstance(pi, np.ndarray):
+            pi = np.array(pi, dtype=float)
+        action_size = self.getActionSize()
+        assert pi.shape == (action_size,)
+        # 1. No flip
+        symmetries = [(board, pi)]
+        pi = pi.reshape(NUM_SQUARES, NUM_SQUARES)
+        # 2. Horizontal flip
+        symmetries.append(
+            (board.transform(chess.flip_horizontal), np.flip(pi, axis=1).flatten())
+        )
+        # TODO: other flips?
+        return symmetries
 
     def stringRepresentation(self, board: Board) -> str:
         """Represent the board as a string, for MCTS hashing."""

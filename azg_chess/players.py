@@ -1,23 +1,22 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Sequence
 
 import chess
 import chess.engine
 import numpy as np
-import numpy.typing as npt
 
-from azg_chess.game import PLAYER_1, to_action
+from azg_chess.game import WHITE_PLAYER, action_to_move, move_to_action
 
 if TYPE_CHECKING:
-    from azg_chess.game import ActionIndex, Board, ChessGame, PlayerID
+    from azg_chess.game import Board, ChessGame, PlayerID
 
 
 class Player(ABC):
     """Base class for a chess player."""
 
-    def __init__(self, game: ChessGame, player_id: PlayerID = PLAYER_1):
+    def __init__(self, game: ChessGame, player_id: PlayerID = WHITE_PLAYER):
         self.game = game
         self._player = player_id
 
@@ -28,7 +27,7 @@ class Player(ABC):
     INVALID_MOVE = False
     VALID_MOVE = True
 
-    def get_valid_moves(self, board: Board) -> npt.NDArray[bool]:
+    def get_moves(self, board: Board) -> Sequence[bool]:
         """
         Get a vector that identifies moves as invalid False or valid True.
 
@@ -41,12 +40,12 @@ class Player(ABC):
         """
         valids = np.zeros(self.game.getActionSize(), dtype=bool)
         for move in board.legal_moves:
-            valids[to_action(move)] = self.VALID_MOVE
+            valids[move_to_action(move)] = self.VALID_MOVE
         return valids
 
     @abstractmethod
-    def act(self, board: Board) -> ActionIndex:
-        """Choose an action given the board."""
+    def choose_move(self, board: Board) -> chess.Move:
+        """Choose (but don't make) a move given the board."""
 
 
 class RandomPlayer(Player):
@@ -55,28 +54,29 @@ class RandomPlayer(Player):
     DEFAULT_SEED = 42
 
     def __init__(
-        self, game: ChessGame, player_id: PlayerID = PLAYER_1, seed: int = DEFAULT_SEED
+        self,
+        game: ChessGame,
+        player_id: PlayerID = WHITE_PLAYER,
+        seed: int = DEFAULT_SEED,
     ):
         super().__init__(game, player_id)
         self._rng = np.random.default_rng(seed)
 
-    def act(self, board: Board) -> ActionIndex:
-        valid_moves = self.get_valid_moves(board)
-        return self._rng.choice(valid_moves.nonzero()[0])
+    def choose_move(self, board: Board) -> chess.Move:
+        valid_moves = self.get_moves(board).nonzero()[0]
+        return action_to_move(action=self._rng.choice(valid_moves))
 
 
 class HumanChessPlayer(Player):
     """Player that chooses an action based on user input of a UCI string."""
 
-    def act(self, board: Board) -> ActionIndex:
+    def choose_move(self, board: Board) -> chess.Move:
         while True:
             uci_input = input("Please input a valid UCI string: ")
             try:
-                move = chess.Move.from_uci(uci_input)
-                break
+                return chess.Move.from_uci(uci_input)
             except chess.InvalidMoveError:
                 print(f"Invalid UCI {uci_input}.")
-        return to_action(move)
 
 
 class StockfishPlayer(Player):
@@ -93,17 +93,17 @@ class StockfishPlayer(Player):
     def __init__(
         self,
         game: ChessGame,
-        player_id: PlayerID = PLAYER_1,
+        player_id: PlayerID = WHITE_PLAYER,
         stockfish_path: str = DEFAULT_STOCKFISH_PATH,
     ):
         super().__init__(game, player_id)
         self._engine = chess.engine.SimpleEngine.popen_uci(stockfish_path)
 
-    def act(self, board: Board) -> ActionIndex:
+    def choose_move(self, board: Board) -> chess.Move:
         # SEE: https://python-chess.readthedocs.io/en/latest/engine.html#playing
         result = self._engine.play(board, limit=chess.engine.Limit(time=0.1))
         assert result.move is not None, "Stockfish didn't pick a best move."
-        return to_action(result.move)
+        return result.move
 
     def __del__(self) -> None:
         self._engine.close()
