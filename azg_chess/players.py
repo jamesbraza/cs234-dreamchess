@@ -88,16 +88,22 @@ class StockfishPlayer(Player):
     """
 
     # NOTE: this is the path for macOS after `brew install stockfish`
-    DEFAULT_STOCKFISH_PATH = "/opt/homebrew/bin/stockfish"
+    DEFAULT_ENGINE_PATH = "/opt/homebrew/bin/stockfish"
+    # SEE: https://www.chess.com/forum/view/general/what-is-a-good-chess-rating
+    DEFAULT_ELO = 1600  # Lower bound of class B (good) player
 
     def __init__(
         self,
         game: ChessGame,
         player_id: PlayerID = WHITE_PLAYER,
-        stockfish_path: str = DEFAULT_STOCKFISH_PATH,
+        engine_path: str = DEFAULT_ENGINE_PATH,
+        engine_elo: int = DEFAULT_ELO,
     ):
         super().__init__(game, player_id)
-        self._engine = chess.engine.SimpleEngine.popen_uci(stockfish_path)
+        self._engine = chess.engine.SimpleEngine.popen_uci(engine_path)
+        # NOTE: requires Stockfish 11 per here:
+        # https://github.com/official-stockfish/Stockfish/issues/3358
+        self._engine.configure({"UCI_LimitStrength": True, "UCI_Elo": engine_elo})
 
     def choose_move(self, board: Board) -> chess.Move:
         # SEE: https://python-chess.readthedocs.io/en/latest/engine.html#playing
