@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING
 
 import chess
 import chess.engine
@@ -10,6 +10,8 @@ import numpy as np
 from azg_chess.game import WHITE_PLAYER, action_to_move, move_to_action
 
 if TYPE_CHECKING:
+    import numpy.typing as npt
+
     from azg_chess.game import Board, ChessGame, PlayerID
 
 
@@ -27,7 +29,7 @@ class Player(ABC):
     INVALID_MOVE = False
     VALID_MOVE = True
 
-    def get_moves(self, board: Board) -> Sequence[bool]:
+    def get_moves(self, board: Board) -> npt.NDArray[bool]:
         """
         Get a vector that identifies moves as invalid False or valid True.
 
