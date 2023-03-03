@@ -1,0 +1,4 @@
+# azg_chess
+chess
+numpy>=1.21  # For numpy.typing
+# azg

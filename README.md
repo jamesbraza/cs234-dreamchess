@@ -24,12 +24,24 @@ There is a slight learning curve to understand the dataset.
 - The header contains information like game date, ELO of each player,
   and if an initial position was specified (e.g. Fischer Random Chess).
 
+A chess board is an 8 x 8 grid where:
+
+- Rows ("rank"): numbered 1 (bottom row) to 8 (top row).
+- Cols ("file"): lettered a (left column) to h (right column).
+
 Moves are written in [Portable Game Notation][8],
-which uses [Algebraic Notation][9] to describe each move as [movetext][7].
+which uses [Algebraic Notation][9]
+(also known as standard algebraic notation (SAN) or standard notation)
+to describe each move as [movetext][7].
+
 Stated with regex-like notation,
 movetext is governed by `ab.(c?d?e|O-O|O-O-O|e=f)`:
 
 1. `a`: player, either white `W` or black `B`.
+   - Note: in Forsyth–Edwards Notation (FEN) notation,
+     used by the `chess` library,
+     white pieces are designated with capital letters,
+     and black pieces are designated with lowercase letters.
 1. `b`: one-indexed turn number.
 1. `.`: separator.
 
@@ -40,8 +52,7 @@ The rest could be one of several options:
      queen `Q`, rook `R`, bishop `B`, or knight `N` (`S` in other contexts).
   1. `d?`: capture, either no capture (no letter) or capture `x`.
   1. `e`: board destination.  When 2+ pieces could have reached the destination,
-     the piece's original rank (row, as a number), file (column, as a letter),
-     or both are included.
+     the piece's original rank (row), file (column), or both are included.
      For example, `g5` means the piece moved to `g5`,
      `df8` means the piece moved from `d8` to `f8`,
      `1a3` means the piece moved from `a1` to `a3`,
@@ -51,6 +62,7 @@ The rest could be one of several options:
 - Pawn promotion:
   1. `e`: board destination (see above).
   1. `=`: indicates promotion.
+     - Note: 'underpromotion' is a term for promoting a pawn to a non-queen piece.
   1. `f`: exchanged piece.
 
 And lastly if the move leads to a check `+` or checkmate `#`.
