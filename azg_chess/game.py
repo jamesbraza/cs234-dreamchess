@@ -87,7 +87,7 @@ class ChessGame(Game):
             and chess.square_rank(move.to_square) in _EIGHTH_RANK
         ):
             move.promotion = chess.QUEEN  # Assume always queening
-        board.push(move=move)
+        board.push(move=move)  # NOTE: this flips board.turn
         return board, -1 * player
 
     INVALID_MOVE = False
@@ -142,8 +142,9 @@ class ChessGame(Game):
         Returns:
             Canonical form of the board.
         """
-        if player == BLACK_PLAYER:
-            board.apply_mirror()  # Mirror vertically, swap piece colors, etc.
+        if board.turn == chess.BLACK:
+            # Mirror vertically, swap piece colors, flip board.turn, etc.
+            board.apply_mirror()
         return board  # NOTE: this is not a copy
 
     def getSymmetries(self, board: Board, pi: Policy) -> list[tuple[Board, Policy]]:
