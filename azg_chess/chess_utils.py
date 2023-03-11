@@ -27,16 +27,14 @@ def to_display(board: chess.Board, *, verbosity: int = 0, pretty: bool = False) 
     rows = board.unicode(empty_square=".") if pretty else str(board).split("\n")
     if verbosity == 0:
         return os.linesep.join(rows)
-    elif verbosity == 1:
-        board_string = os.linesep.join(
-            "%d %s" % (8 - i, row) for i, row in enumerate(rows)
-        )
+    if verbosity == 1:
+        board_string = os.linesep.join(f"{8-i} {row}" for i, row in enumerate(rows))
         return f"  a b c d e f g h{os.linesep}{board_string}"
-    elif verbosity == 2:
+    if verbosity == 2:
         top_corner = "*" if board.turn == chess.BLACK else "."
         bottom_corner = "*" if board.turn == chess.WHITE else "."
         board_string = os.linesep.join(
-            "%d | %s | %d" % (8 - i, row, 8 - i) for i, row in enumerate(rows)
+            f"{8-i} | {row} | {8-i}" for i, row in enumerate(rows)
         )
         return (
             f"    a b c d e f g h{os.linesep}"
