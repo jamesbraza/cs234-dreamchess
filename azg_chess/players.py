@@ -7,47 +7,29 @@ import chess
 import chess.engine
 import numpy as np
 
-from azg_chess.game import WHITE_PLAYER, action_to_move, move_to_action
+from azg_chess.game import WHITE_PLAYER, move_to_action
 
 if TYPE_CHECKING:
-    import numpy.typing as npt
-
-    from azg_chess.game import Board, ChessGame, PlayerID
+    from azg_chess.game import ActionIndex, Board, PlayerID
 
 
 class Player(ABC):
     """Base class for a chess player."""
 
-    def __init__(self, game: ChessGame, player_id: PlayerID = WHITE_PLAYER):
-        self.game = game
+    def __init__(self, player_id: PlayerID = WHITE_PLAYER):
         self._player = player_id
 
     @property
     def id(self) -> PlayerID:
         return self._player
 
-    INVALID_MOVE = False
-    VALID_MOVE = True
-
-    def get_moves(self, board: Board) -> npt.NDArray[bool]:
-        """
-        Get a vector that identifies moves as invalid False or valid True.
-
-        Args:
-            board: Current board.
-
-        Returns:
-            Vector of size self.getActionSize() where each element is a
-                False (invalid move) or True (valid move).
-        """
-        valids = np.zeros(self.game.getActionSize(), dtype=bool)
-        for move in board.legal_moves:
-            valids[move_to_action(move)] = self.VALID_MOVE
-        return valids
-
     @abstractmethod
     def choose_move(self, board: Board) -> chess.Move:
         """Choose (but don't make) a move given the board."""
+
+    def __call__(self, board: Board) -> ActionIndex:
+        """Call to the player chooses (but doesn't take) an action."""
+        return move_to_action(self.choose_move(board))
 
 
 class RandomPlayer(Player):
@@ -55,18 +37,12 @@ class RandomPlayer(Player):
 
     DEFAULT_SEED = 42
 
-    def __init__(
-        self,
-        game: ChessGame,
-        player_id: PlayerID = WHITE_PLAYER,
-        seed: int = DEFAULT_SEED,
-    ):
-        super().__init__(game, player_id)
+    def __init__(self, player_id: PlayerID = WHITE_PLAYER, seed: int = DEFAULT_SEED):
+        super().__init__(player_id)
         self._rng = np.random.default_rng(seed)
 
     def choose_move(self, board: Board) -> chess.Move:
-        valid_moves = self.get_moves(board).nonzero()[0]
-        return action_to_move(action=self._rng.choice(valid_moves))
+        return self._rng.choice(list(board.legal_moves))
 
 
 class HumanChessPlayer(Player):
@@ -96,12 +72,11 @@ class StockfishPlayer(Player):
 
     def __init__(
         self,
-        game: ChessGame,
         player_id: PlayerID = WHITE_PLAYER,
         engine_path: str = DEFAULT_ENGINE_PATH,
         engine_elo: int = DEFAULT_ELO,
     ):
-        super().__init__(game, player_id)
+        super().__init__(player_id)
         self._engine = chess.engine.SimpleEngine.popen_uci(engine_path)
         # NOTE: requires Stockfish 11 per here:
         # https://github.com/official-stockfish/Stockfish/issues/3358

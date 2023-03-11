@@ -9,12 +9,13 @@ import numpy as np
 from azg.Game import Game
 
 if TYPE_CHECKING:
-    from azg_chess.players import Player
+    import numpy.typing as npt
+
 
 BOARD_DIMENSIONS = (8, 8)
 NUM_SQUARES = len(chess.SQUARES)  # 64
 ACTION_INDICES = np.arange(NUM_SQUARES**2, dtype=int).reshape(NUM_SQUARES, -1)
-_FIRST_ROW = range(chess.A2)
+_EIGHTH_RANK = range(chess.A8, chess.H8 + 1)
 
 Board: TypeAlias = chess.Board
 ActionIndex: TypeAlias = int
@@ -38,15 +39,30 @@ def action_to_move(action: ActionIndex) -> chess.Move:
     )
 
 
+INVALID_MOVE = False
+VALID_MOVE = True
+
+
+def get_moves(game: Game, board: Board) -> npt.NDArray[bool]:
+    """
+    Get a vector that identifies moves as invalid False or valid True.
+
+    Args:
+        game: Current game.
+        board: Current board.
+
+    Returns:
+        Vector of size game.getActionSize() where each element is a
+            False (invalid move) or True (valid move).
+    """
+    valids = np.zeros(game.getActionSize(), dtype=bool)
+    for move in board.legal_moves:
+        valids[move_to_action(move)] = VALID_MOVE
+    return valids
+
+
 class ChessGame(Game):
     """Game adaptation for the chess library."""
-
-    def __init__(self, player_1: Player, player_2: Player):
-        super().__init__()
-        self.players: dict[PlayerID, Player] = {
-            WHITE_PLAYER: player_1,
-            BLACK_PLAYER: player_2,
-        }
 
     def getInitBoard(self) -> Board:
         """Get a board representation at the start of a match."""
@@ -68,11 +84,14 @@ class ChessGame(Game):
         move = action_to_move(action)
         if (
             board.piece_at(move.from_square).piece_type == chess.PAWN
-            and chess.square_rank(move.to_square) in _FIRST_ROW
+            and chess.square_rank(move.to_square) in _EIGHTH_RANK
         ):
             move.promotion = chess.QUEEN  # Assume always queening
         board.push(move=move)
         return board, -1 * player
+
+    INVALID_MOVE = False
+    VALID_MOVE = True
 
     def getValidMoves(self, board: Board, player: PlayerID) -> Sequence[bool]:
         """
@@ -86,7 +105,7 @@ class ChessGame(Game):
             Vector of size self.getActionSize() where each element is a
                 False (invalid move) or True (valid move).
         """
-        return self.players[player].get_moves(board)
+        return get_moves(game=self, board=board)
 
     UNFINISHED_REWARD = 0
     WON_REWARD = 1
