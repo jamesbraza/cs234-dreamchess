@@ -114,10 +114,10 @@ class ChessGame(Game):
 
     def getGameEnded(self, board: Board, player: PlayerID) -> float:
         """Get the current reward associated with the board and player."""
-        result: str = board.result()
-        if result == "*":
+        white_result: str = board.result()
+        if white_result == "*":
             return self.UNFINISHED_REWARD
-        white_player_outcome = result.split("-")[0]
+        white_player_outcome = white_result.split("-")[0]
         match player == WHITE_PLAYER, white_player_outcome == "1", white_player_outcome == "0":
             case (True, True, _) | (False, _, True):
                 return self.WON_REWARD
