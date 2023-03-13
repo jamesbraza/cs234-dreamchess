@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import math
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, TypeAlias
@@ -43,7 +41,7 @@ INVALID_MOVE = False
 VALID_MOVE = True
 
 
-def get_moves(game: Game, board: Board) -> npt.NDArray[bool]:
+def get_moves(game: Game, board: Board) -> "npt.NDArray[bool]":
     """
     Get a vector that identifies moves as invalid False or valid True.
 
