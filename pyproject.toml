@@ -82,6 +82,9 @@ pretty = true
 # Shows a short summary line after error messages.
 error_summary = false
 
+# A comma-separated list of mypy plugins
+plugins = ["numpy.typing.mypy_plugin"]
+
 
 [tool.flake8]
 # SEE: https://flake8.pycqa.org/en/latest/user/options.html

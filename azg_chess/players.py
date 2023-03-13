@@ -42,7 +42,7 @@ class RandomPlayer(Player):
         self._rng = np.random.default_rng(seed)
 
     def choose_move(self, board: Board) -> chess.Move:
-        return self._rng.choice(list(board.legal_moves))
+        return self._rng.choice(list(board.legal_moves))  # type: ignore[arg-type]
 
 
 class HumanChessPlayer(Player):

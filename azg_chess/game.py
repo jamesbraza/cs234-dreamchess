@@ -95,7 +95,7 @@ class ChessGame(Game):
         board = self.getCanonicalForm(board, player)
         move = action_to_move(action)
         if (
-            board.piece_at(move.from_square).piece_type == chess.PAWN
+            board.piece_type_at(move.from_square) == chess.PAWN
             and chess.square_rank(move.to_square) in _EIGHTH_RANK
         ):
             move.promotion = chess.QUEEN  # Assume always queening
