@@ -1,4 +1,6 @@
+coverage
 ipython  # For PyCharm debugging
 mypy
 pre-commit
 pylint[spelling]
+pytest
