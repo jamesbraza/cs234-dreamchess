@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import math
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, TypeAlias
@@ -9,12 +7,13 @@ import numpy as np
 from azg.Game import Game
 
 if TYPE_CHECKING:
-    from azg_chess.players import Player
+    import numpy.typing as npt
+
 
 BOARD_DIMENSIONS = (8, 8)
 NUM_SQUARES = len(chess.SQUARES)  # 64
 ACTION_INDICES = np.arange(NUM_SQUARES**2, dtype=int).reshape(NUM_SQUARES, -1)
-_FIRST_ROW = range(chess.A2)
+_EIGHTH_RANK = range(chess.A8, chess.H8 + 1)
 
 Board: TypeAlias = chess.Board
 ActionIndex: TypeAlias = int
@@ -38,15 +37,30 @@ def action_to_move(action: ActionIndex) -> chess.Move:
     )
 
 
+INVALID_MOVE = False
+VALID_MOVE = True
+
+
+def get_moves(game: Game, board: Board) -> "npt.NDArray[bool]":
+    """
+    Get a vector that identifies moves as invalid False or valid True.
+
+    Args:
+        game: Current game.
+        board: Current board.
+
+    Returns:
+        Vector of size game.getActionSize() where each element is a
+            False (invalid move) or True (valid move).
+    """
+    valids = np.zeros(game.getActionSize(), dtype=bool)
+    for move in board.legal_moves:
+        valids[move_to_action(move)] = VALID_MOVE
+    return valids
+
+
 class ChessGame(Game):
     """Game adaptation for the chess library."""
-
-    def __init__(self, player_1: Player, player_2: Player):
-        super().__init__()
-        self.players: dict[PlayerID, Player] = {
-            WHITE_PLAYER: player_1,
-            BLACK_PLAYER: player_2,
-        }
 
     def getInitBoard(self) -> Board:
         """Get a board representation at the start of a match."""
@@ -65,28 +79,50 @@ class ChessGame(Game):
     def getNextState(
         self, board: Board, player: PlayerID, action: ActionIndex
     ) -> State:
+        """
+        Apply the action to the board in-place, returning it and next player.
+
+        Args:
+            board: Un-canonicalized current board, to be mutated.
+            player: ID of the player taking the action.
+            action: Action index of the current move on a canonicalized board.
+
+        Returns:
+            Tuple of next board, next turn's player ID.
+        """
+        # Canonicalize the board since the action passed in corresponds with
+        # coordinates on a canonicalized board
+        board = self.getCanonicalForm(board, player)
         move = action_to_move(action)
         if (
-            board.piece_at(move.from_square).piece_type == chess.PAWN
-            and chess.square_rank(move.to_square) in _FIRST_ROW
+            board.piece_type_at(move.from_square) == chess.PAWN
+            and chess.square_rank(move.to_square) in _EIGHTH_RANK
         ):
             move.promotion = chess.QUEEN  # Assume always queening
-        board.push(move=move)
+        board.push(move=move)  # NOTE: this in-place flips board.turn
+        if player == BLACK_PLAYER:
+            # This synchronizes player concept with board's turn concept, so if:
+            # - Next player is white: board's turn is white
+            # - Next player is black: board's turn is black
+            board.apply_mirror()  # NOTE: in-place mirror, not a copy
         return board, -1 * player
+
+    INVALID_MOVE = False
+    VALID_MOVE = True
 
     def getValidMoves(self, board: Board, player: PlayerID) -> Sequence[bool]:
         """
         Get a vector that identifies moves as invalid False or valid True.
 
         Args:
-            board: Current board.
+            board: Canonicalized current board, don't mutate.
             player: ID of the player who needs to move.
 
         Returns:
             Vector of size self.getActionSize() where each element is a
                 False (invalid move) or True (valid move).
         """
-        return self.players[player].get_moves(board)
+        return get_moves(game=self, board=board)
 
     UNFINISHED_REWARD = 0
     WON_REWARD = 1
@@ -94,12 +130,25 @@ class ChessGame(Game):
     DRAW_REWARD = 1e-5  # Small non-zero value
 
     def getGameEnded(self, board: Board, player: PlayerID) -> float:
-        """Get the current reward associated with the board and player."""
-        result: str = board.result()
-        if result == "*":
+        """
+        Get the current reward associated with the current game state.
+
+        Args:
+            board: Un-canonicalized current board, don't mutate.
+            player: ID of the player to check if won/lost.
+
+        Returns:
+            Reward associated with the game state.
+        """
+        white_result: str = board.result()
+        if white_result == "*":
             return self.UNFINISHED_REWARD
-        white_player_outcome = result.split("-")[0]
-        match player == WHITE_PLAYER, white_player_outcome == "1", white_player_outcome == "0":
+        white_player_outcome = white_result.split("-")[0]
+        match (
+            player == WHITE_PLAYER,
+            white_player_outcome == "1",
+            white_player_outcome == "0",
+        ):
             case (True, True, _) | (False, _, True):
                 return self.WON_REWARD
             case (True, _, True) | (False, True, _):
@@ -116,15 +165,21 @@ class ChessGame(Game):
         For chess, the canonical form is from white player's point of view.
         If the black player is moving, invert the colors and flip vertically.
 
+        NOTE: this method can in-place modify the board, if desired.
+
         Args:
-            board: Current board.
+            board: Current board to be canonicalized.
             player: ID of the player who needs to move.
 
         Returns:
             Canonical form of the board.
         """
-        if player == BLACK_PLAYER:
-            board.apply_mirror()  # Mirror vertically, swap piece colors, etc.
+        match board.turn == chess.BLACK, player == BLACK_PLAYER:
+            case True, True:
+                # In-place mirror so future canonical calls are faster
+                board.apply_mirror()
+            case True, False:
+                raise NotImplementedError("Unreachable, by design.")
         return board  # NOTE: this is not a copy
 
     def getSymmetries(self, board: Board, pi: Policy) -> list[tuple[Board, Policy]]:

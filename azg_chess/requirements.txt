@@ -2,3 +2,5 @@
 chess
 numpy>=1.21  # For numpy.typing
 # azg
+coloredlogs
+tqdm
