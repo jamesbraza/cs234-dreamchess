@@ -1,22 +1,41 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol, TypeVar
 
 import chess
 import chess.engine
 import numpy as np
 
-from azg_chess.game import WHITE_PLAYER, move_to_action
+from azg_chess.game import WHITE_PLAYER, Board, move_to_action
 
 if TYPE_CHECKING:
-    from azg_chess.game import ActionIndex, Board, PlayerID
+    from azg_chess.game import ActionIndex, PlayerID
 
 
-class Player(ABC):
+TBoard_contra = TypeVar("TBoard_contra", contravariant=True)
+
+
+class Player(Protocol[TBoard_contra]):
+    """Player can choose a move given a board."""
+
+    def __call__(self, board: TBoard_contra) -> ActionIndex:
+        """
+        Call to the player chooses (but doesn't take) an action.
+
+        Args:
+            board: Canonicalized board, don't mutate.
+
+        Returns:
+            Action index of a move on a canonicalized board.
+        """
+
+
+class ChessPlayer(Player[Board], ABC):
     """Base class for a chess player."""
 
     def __init__(self, player_id: PlayerID = WHITE_PLAYER):
+        super().__init__()
         self._player = player_id
 
     @property
@@ -28,11 +47,10 @@ class Player(ABC):
         """Choose (but don't make) a move given the board."""
 
     def __call__(self, board: Board) -> ActionIndex:
-        """Call to the player chooses (but doesn't take) an action."""
         return move_to_action(self.choose_move(board))
 
 
-class RandomPlayer(Player):
+class RandomChessPlayer(ChessPlayer):
     """Player that randomly selects a valid action."""
 
     DEFAULT_SEED = 42
@@ -45,7 +63,7 @@ class RandomPlayer(Player):
         return self._rng.choice(list(board.legal_moves))  # type: ignore[arg-type]
 
 
-class HumanChessPlayer(Player):
+class HumanChessPlayer(ChessPlayer):
     """Player that chooses an action based on user input of a UCI string."""
 
     def choose_move(self, board: Board) -> chess.Move:
@@ -57,7 +75,7 @@ class HumanChessPlayer(Player):
                 print(f"Invalid UCI {uci_input}.")
 
 
-class StockfishPlayer(Player):
+class StockfishPlayer(ChessPlayer):
     """
     Player whose decisions are made by the Stockfish chess engine.
 

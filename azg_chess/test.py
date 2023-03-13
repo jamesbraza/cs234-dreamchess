@@ -1,4 +1,5 @@
 import math
+from functools import partial
 from operator import gt, lt
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
@@ -7,11 +8,11 @@ import chess
 import pytest
 from azg.Arena import Arena
 
-from azg_chess.chess_utils import make_display_func
 from azg_chess.game import (
     BLACK_PLAYER,
     BOARD_DIMENSIONS,
     INVALID_MOVE,
+    NUM_PIECES,
     NUM_SQUARES,
     VALID_MOVE,
     WHITE_PLAYER,
@@ -38,6 +39,7 @@ class TestGame:
     def test_constants(self) -> None:
         # Module-level constants
         assert math.prod(BOARD_DIMENSIONS) == NUM_SQUARES
+        assert NUM_PIECES == 6
         assert WHITE_PLAYER == int(chess.WHITE)
         assert BLACK_PLAYER != WHITE_PLAYER
         assert not INVALID_MOVE
@@ -136,20 +138,23 @@ class TestGame:
             )
             mock_apply_mirror.assert_called_once_with()
 
-
-@pytest.mark.parametrize(
-    ("white_elo", "black_elo", "comparison"), [(1400, 2600, lt), (2600, 1400, gt)]
-)
-def test_full_game(
-    chess_game: ChessGame,
-    white_elo: int,
-    black_elo: int,
-    comparison: "Callable[[int, int], bool]",
-) -> None:
-    white_player = StockfishPlayer(engine_elo=white_elo)
-    black_player = StockfishPlayer(BLACK_PLAYER, engine_elo=black_elo)
-    arena = Arena(
-        white_player, black_player, chess_game, display=make_display_func(verbosity=2)
+    @pytest.mark.parametrize(
+        ("white_elo", "black_elo", "comparison"), [(1400, 2600, lt), (2600, 1400, gt)]
     )
-    n_p1_wins, n_p2_wins, _ = arena.playGames(4)
-    assert comparison(n_p1_wins, n_p2_wins)
+    def test_full_game(
+        self,
+        chess_game: ChessGame,
+        white_elo: int,
+        black_elo: int,
+        comparison: "Callable[[int, int], bool]",
+    ) -> None:
+        white_player = StockfishPlayer(engine_elo=white_elo)
+        black_player = StockfishPlayer(BLACK_PLAYER, engine_elo=black_elo)
+        arena = Arena(
+            white_player,
+            black_player,
+            chess_game,
+            display=partial(chess_game.display, verbosity=2),
+        )
+        n_p1_wins, n_p2_wins, _ = arena.playGames(4, verbose=True)
+        assert comparison(n_p1_wins, n_p2_wins)

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import os
 from typing import TYPE_CHECKING
 
@@ -47,7 +45,7 @@ def to_display(board: chess.Board, *, verbosity: int = 0, pretty: bool = False) 
 
 
 def make_display_func(
-    print_func: Callable[[str], None] = print, **to_display_kwargs
-) -> Callable[[chess.Board], None]:
+    print_func: "Callable[[str], None]" = print, **to_display_kwargs
+) -> "Callable[[chess.Board], None]":
     """Get a function to display a board."""
     return lambda b: print_func(to_display(b, **to_display_kwargs))
