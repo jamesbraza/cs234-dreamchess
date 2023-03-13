@@ -1,4 +1,5 @@
 import math
+from functools import partial
 from operator import gt, lt
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
@@ -7,7 +8,6 @@ import chess
 import pytest
 from azg.Arena import Arena
 
-from azg_chess.chess_utils import make_display_func
 from azg_chess.game import (
     BLACK_PLAYER,
     BOARD_DIMENSIONS,
@@ -154,7 +154,7 @@ class TestGame:
             white_player,
             black_player,
             chess_game,
-            display=make_display_func(verbosity=2),
+            display=partial(chess_game.display, verbosity=2),
         )
-        n_p1_wins, n_p2_wins, _ = arena.playGames(4)
+        n_p1_wins, n_p2_wins, _ = arena.playGames(4, verbose=True)
         assert comparison(n_p1_wins, n_p2_wins)
