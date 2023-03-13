@@ -81,6 +81,20 @@ class ChessGame(Game):
     def getNextState(
         self, board: Board, player: PlayerID, action: ActionIndex
     ) -> State:
+        """
+        Apply the action to the board in-place, returning it and next player.
+
+        Args:
+            board: Un-canonicalized current board, to be mutated.
+            player: ID of the player taking the action.
+            action: Action index of the current move on a canonicalized board.
+
+        Returns:
+            Tuple of next board, next turn's player ID.
+        """
+        # Canonicalize the board since the action passed in corresponds with
+        # coordinates on a canonicalized board
+        board = self.getCanonicalForm(board, player)
         move = action_to_move(action)
         if (
             board.piece_at(move.from_square).piece_type == chess.PAWN
@@ -88,6 +102,9 @@ class ChessGame(Game):
         ):
             move.promotion = chess.QUEEN  # Assume always queening
         board.push(move=move)  # NOTE: this flips board.turn
+        if player == BLACK_PLAYER:
+            # Why is this here?
+            board.apply_mirror()  # Re-canonicalize
         return board, -1 * player
 
     INVALID_MOVE = False
@@ -98,7 +115,7 @@ class ChessGame(Game):
         Get a vector that identifies moves as invalid False or valid True.
 
         Args:
-            board: Current board.
+            board: Canonicalized current board, don't mutate.
             player: ID of the player who needs to move.
 
         Returns:
@@ -113,15 +130,46 @@ class ChessGame(Game):
     DRAW_REWARD = 1e-5  # Small non-zero value
 
     def getGameEnded(self, board: Board, player: PlayerID) -> float:
-        """Get the current reward associated with the board and player."""
+        """
+        Get the current reward associated with the current game state.
+
+        Args:
+            board: Un-canonicalized current board, don't mutate.
+            player: ID of the player to check if won/lost.
+
+        Returns:
+            Reward associated with the game state.
+        """
+        print("getGameEnded: top.")
         white_result: str = board.result()
         if white_result == "*":
+            print("getGameEnded: not ended")
             return self.UNFINISHED_REWARD
+        print(
+            f"getGameEnded: mid1 with {player=}, {board.turn=}, "
+            f"{board.result()=} {board.outcome().winner=}."
+        )
+        # if player == WHITE_PLAYER and board.turn == chess.BLACK:
+        #     print("getGameEnded: mirror")
+        #     board = board.mirror()  # Standardize logic
+        white_result: str = board.result()
         white_player_outcome = white_result.split("-")[0]
+        print(
+            f"getGameEnded: mid2 with {player=}, {board.turn=}, "
+            f"{board.result()=} {board.outcome().winner=}, {white_player_outcome=}."
+        )
         match player == WHITE_PLAYER, white_player_outcome == "1", white_player_outcome == "0":
             case (True, True, _) | (False, _, True):
+                print(
+                    f"getGameEnded: {player=} won, "
+                    f"winner={player * self.WON_REWARD}."
+                )
                 return self.WON_REWARD
             case (True, _, True) | (False, True, _):
+                print(
+                    f"getGameEnded: {player=} lost, "
+                    f"winner={player * self.LOST_REWARD}."
+                )
                 return self.LOST_REWARD
         assert white_player_outcome == "1/2"  # Confirm no other possibilities
         return self.DRAW_REWARD
@@ -136,15 +184,21 @@ class ChessGame(Game):
         If the black player is moving, invert the colors and flip vertically.
 
         Args:
-            board: Current board.
+            board: Current board to be canonicalized.
             player: ID of the player who needs to move.
 
         Returns:
             Canonical form of the board.
         """
+        print(f"Canonical: top, {player=}, {board.turn=}.")
         if board.turn == chess.BLACK:
             # Mirror vertically, swap piece colors, flip board.turn, etc.
-            board.apply_mirror()
+            if player == WHITE_PLAYER:
+                print("Canonical: apply_mirror")
+                board.apply_mirror()
+            if player == BLACK_PLAYER:
+                print("Canonical: apply_mirror")
+                board.apply_mirror()
         return board  # NOTE: this is not a copy
 
     def getSymmetries(self, board: Board, pi: Policy) -> list[tuple[Board, Policy]]:
