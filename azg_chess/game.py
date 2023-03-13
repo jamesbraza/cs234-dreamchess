@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
 BOARD_DIMENSIONS = (8, 8)
 NUM_SQUARES = len(chess.SQUARES)  # 64
+NUM_PIECES = len(chess.PIECE_TYPES)  # 6
 ACTION_INDICES = np.arange(NUM_SQUARES**2, dtype=int).reshape(NUM_SQUARES, -1)
 _EIGHTH_RANK = range(chess.A8, chess.H8 + 1)
 
