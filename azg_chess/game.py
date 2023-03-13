@@ -6,7 +6,11 @@ import chess
 import numpy as np
 from azg.Game import Game
 
+from azg_chess.chess_utils import to_display
+
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     import numpy.typing as npt
 
 
@@ -46,8 +50,8 @@ def get_moves(game: Game, board: Board) -> "npt.NDArray[bool]":
     Get a vector that identifies moves as invalid False or valid True.
 
     Args:
-        game: Current game.
-        board: Current board.
+        game: Game.
+        board: Board, don't mutate.
 
     Returns:
         Vector of size game.getActionSize() where each element is a
@@ -83,9 +87,9 @@ class ChessGame(Game):
         Apply the action to the board in-place, returning it and next player.
 
         Args:
-            board: Un-canonicalized current board, to be mutated.
+            board: Un-canonicalized board, to be mutated.
             player: ID of the player taking the action.
-            action: Action index of the current move on a canonicalized board.
+            action: Action index of a move on a canonicalized board.
 
         Returns:
             Tuple of next board, next turn's player ID.
@@ -115,7 +119,7 @@ class ChessGame(Game):
         Get a vector that identifies moves as invalid False or valid True.
 
         Args:
-            board: Canonicalized current board, don't mutate.
+            board: Canonicalized board, don't mutate.
             player: ID of the player who needs to move.
 
         Returns:
@@ -131,10 +135,10 @@ class ChessGame(Game):
 
     def getGameEnded(self, board: Board, player: PlayerID) -> float:
         """
-        Get the current reward associated with the current game state.
+        Get the reward associated with a game state.
 
         Args:
-            board: Un-canonicalized current board, don't mutate.
+            board: Un-canonicalized board, don't mutate.
             player: ID of the player to check if won/lost.
 
         Returns:
@@ -165,10 +169,8 @@ class ChessGame(Game):
         For chess, the canonical form is from white player's point of view.
         If the black player is moving, invert the colors and flip vertically.
 
-        NOTE: this method can in-place modify the board, if desired.
-
         Args:
-            board: Current board to be canonicalized.
+            board: Board to be canonicalized, can mutate the board.
             player: ID of the player who needs to move.
 
         Returns:
@@ -187,7 +189,7 @@ class ChessGame(Game):
         Get symmetrical board representations to expand training data.
 
         Args:
-            board: Current board.
+            board: Canonicalized board, don't mutate.
             pi: Policy vector of size self.getActionSize().
 
         Returns:
@@ -213,3 +215,10 @@ class ChessGame(Game):
         # FEN is a single line of text that captures a board's state, enabling
         # lightweight sharing of a complete game state
         return board.fen()
+
+    @staticmethod
+    def display(
+        board, print_func: "Callable[[str], None]" = print, **to_display_kwargs
+    ) -> None:
+        """Display the board using the input printing function."""
+        print_func(to_display(board, **to_display_kwargs))
