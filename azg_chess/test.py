@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import chess
 import pytest
 from azg.Arena import Arena
+from azg.Coach import Coach
 
 from azg_chess.game import (
     BLACK_PLAYER,
@@ -19,7 +20,8 @@ from azg_chess.game import (
     ChessGame,
     PlayerID,
 )
-from azg_chess.players import StockfishPlayer
+from azg_chess.nn import NNetWrapper
+from azg_chess.players import AlphaZeroChessPlayer, MCTSArgs, StockfishChessPlayer
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -148,8 +150,8 @@ class TestGame:
         black_elo: int,
         comparison: "Callable[[int, int], bool]",
     ) -> None:
-        white_player = StockfishPlayer(engine_elo=white_elo)
-        black_player = StockfishPlayer(BLACK_PLAYER, engine_elo=black_elo)
+        white_player = StockfishChessPlayer(engine_elo=white_elo)
+        black_player = StockfishChessPlayer(BLACK_PLAYER, engine_elo=black_elo)
         arena = Arena(
             white_player,
             black_player,
@@ -158,3 +160,51 @@ class TestGame:
         )
         n_p1_wins, n_p2_wins, _ = arena.playGames(4, verbose=True)
         assert comparison(n_p1_wins, n_p2_wins)
+
+
+class CoachArgs(MCTSArgs):
+    """Data structure to configure the Coach class."""
+
+    # Number of training iterations
+    numIters: int = 1000
+    # Number of self-play games per training iteration
+    numEps: int = 5
+    # Number of iterations to pass before increasing MCTS temp by 1
+    tempThreshold: int = 15
+    # Threshold win percentage of arena games to accept a new neural network
+    updateThreshold: float = 0.6
+    # Number of arena games to assess neural network for acceptance
+    arenaCompare: int = 40
+    # Number of game examples to train the neural networks
+    maxlenOfQueue: int = 200_000
+    # Folder name to save checkpoints
+    checkpoint: str = "checkpoints"
+    # Set True to load in the model weights from checkpoint and training
+    # examples from the load_folder_file
+    load_model: bool = False
+    # Two-tuple of folder and filename where training examples are housed
+    load_folder_file: tuple[str, str] = "models", "best.pt.tar"
+    # Max amount of training examples to keep in the history, dropping the
+    # oldest example beyond that before adding a new one (like a FIFO queue)
+    numItersForTrainExamplesHistory: int = 20
+
+
+class TestNNet:
+    @pytest.mark.parametrize("coach_args", [CoachArgs()])
+    def test_coach(self, chess_game: ChessGame, coach_args: CoachArgs) -> None:
+        coach = Coach(chess_game, NNetWrapper(chess_game), coach_args)
+        coach.learn()
+
+    def test_full_game(self, chess_game: ChessGame, mcts_args: MCTSArgs) -> None:
+        az_player = AlphaZeroChessPlayer(
+            chess_game, player_id=WHITE_PLAYER, mcts_args=mcts_args
+        )
+        black_player = StockfishChessPlayer(BLACK_PLAYER, engine_elo=1400)
+        arena = Arena(
+            player1=az_player,
+            player2=black_player,
+            game=chess_game,
+            display=partial(chess_game.display, verbosity=2),
+        )
+        n_p1_wins, n_p2_wins, n_ties = arena.playGames(2, verbose=True)
+        # TODO: add assertions

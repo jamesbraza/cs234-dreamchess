@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Protocol, TypeVar
+from typing import TYPE_CHECKING, NamedTuple, Protocol, TypeVar
 
 import chess
 import chess.engine
 import numpy as np
+from azg.MCTS import MCTS
+from azg.utils import dotdict
 
-from azg_chess.game import WHITE_PLAYER, Board, move_to_action
+from azg_chess.game import WHITE_PLAYER, Board, action_to_move, move_to_action
+from azg_chess.nn import NNetWrapper
 
 if TYPE_CHECKING:
-    from azg_chess.game import ActionIndex, PlayerID
+    from azg_chess.game import ActionIndex, ChessGame, PlayerID
 
 
 TBoard_contra = TypeVar("TBoard_contra", contravariant=True)
@@ -75,7 +78,7 @@ class HumanChessPlayer(ChessPlayer):
                 print(f"Invalid UCI {uci_input}.")
 
 
-class StockfishPlayer(ChessPlayer):
+class StockfishChessPlayer(ChessPlayer):
     """
     Player whose decisions are made by the Stockfish chess engine.
 
@@ -108,3 +111,41 @@ class StockfishPlayer(ChessPlayer):
 
     def __del__(self) -> None:
         self._engine.close()
+
+
+class MCTSArgs(NamedTuple):
+    """
+    Data structure to configure Monte-Carlo Tree Search object.
+
+    TODO: remove in favor of MCTS.default_args from
+    https://github.com/suragnair/alpha-zero-general/pull/300
+    """
+
+    numMCTSSims: int = 25  # Number of moves for MCTS to simulate.
+    cpuct: float = 1.0  # PUCT exploration constant
+
+
+class AlphaZeroChessPlayer(ChessPlayer):
+    """Players whose decides via a trained AlphaGo Zero-style network."""
+
+    DEFAULT_MCTS_ARGS = MCTSArgs()
+
+    def __init__(
+        self,
+        game: ChessGame,
+        player_id: PlayerID = WHITE_PLAYER,
+        mcts_args: MCTSArgs | dotdict = DEFAULT_MCTS_ARGS,
+        parameters_path: tuple[str, str] | None = None,
+        **nnet_wrapper_kwargs,
+    ):
+        super().__init__(player_id)
+        self._nnet = NNetWrapper(game, **nnet_wrapper_kwargs)
+        if parameters_path is not None:
+            self._nnet.load_checkpoint(*parameters_path)
+        self._mcts = MCTS(game, self._nnet, mcts_args)
+
+    def choose_move(self, board: Board) -> chess.Move:
+        return action_to_move(action=self(board))
+
+    def __call__(self, board: Board) -> ActionIndex:
+        return np.argmax(self._mcts.getActionProb(board, temp=0))
