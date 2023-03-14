@@ -88,7 +88,7 @@ class ChessGame(Game):
         Apply the action to the board in-place, returning it and next player.
 
         Args:
-            board: Un-canonicalized board, to be mutated.
+            board: Un-canonicalized board, don't mutate, but can canonicalize.
             player: ID of the player taking the action.
             action: Action index of a move on a canonicalized board.
 
@@ -97,7 +97,10 @@ class ChessGame(Game):
         """
         # Canonicalize the board since the action passed in corresponds with
         # coordinates on a canonicalized board
-        board = self.getCanonicalForm(board, player)
+        # NOTE: per https://github.com/suragnair/alpha-zero-general/issues/191,
+        # we can't in-place mutate the board. So we copy the canonical board,
+        # without move history as we don't use it (optimization)
+        board = self.getCanonicalForm(board, player).copy(stack=False)
         move = action_to_move(action)
         if (
             board.piece_type_at(move.from_square) == chess.PAWN
