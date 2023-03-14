@@ -8,11 +8,15 @@ import chess
 import numpy as np
 import torch
 from azg.NeuralNet import NeuralNet
+from azg.utils import AverageMeter
 from torch import nn
+from tqdm import tqdm
 
 from azg_chess.game import BOARD_DIMENSIONS, NUM_PIECES
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     import numpy.typing as npt
 
     from azg_chess.game import Board, ChessGame, Policy
@@ -21,24 +25,25 @@ if TYPE_CHECKING:
 EMBEDDING_SHAPE: tuple[int, int, int] = NUM_PIECES, *BOARD_DIMENSIONS
 
 
-def embed_board(board: Board, add_batch_dim: bool = False) -> npt.NDArray[int]:
+def embed(*boards: Board) -> npt.NDArray[int]:
     """
-    Embed the board for input to a neural network.
+    Embed the boards for input to a neural network.
 
     Args:
-        board: Board to embed.
-        add_batch_dim: Set True to inject an axis up front for batching.
+        boards: Variable amount of Boards to embed.
 
     Returns:
-        Embedded representation of the board of shape (8, 8, 6), where white
-            is 1, black is -1, no piece is 0, and layers are pawns (0),
-            knight (1), bishop (2), rook (3), queen (4), and king (5).
+        Embedded representation of the board of shape (B, 8, 8, 6), where B is
+            the batch size (number passed in), white is 1, black is -1, no
+            piece is 0, and layers are pawns (0), knight (1), bishop (2),
+            rook (3), queen (4), and king (5).
     """
-    embedding = np.zeros(EMBEDDING_SHAPE, dtype=int)
-    for sq, pc in board.piece_map().items():
-        xyz = pc.piece_type - 1, chess.square_rank(sq), chess.square_file(sq)
-        embedding[xyz] = 1 if pc.color else -1
-    return embedding if not add_batch_dim else embedding[np.newaxis, :]
+    embedding = np.zeros((len(boards), *EMBEDDING_SHAPE), dtype=int)
+    for i, board in enumerate(boards):
+        for sq, pc in board.piece_map().items():
+            bxyz = i, pc.piece_type - 1, chess.square_rank(sq), chess.square_file(sq)
+            embedding[bxyz] = 1 if pc.color else -1
+    return embedding
 
 
 def conv3d_calc(
@@ -133,14 +138,57 @@ class NNetWrapper(NeuralNet):
 
     def train(
         self,
-        examples: list[tuple[Board, Policy, int]],
+        examples: Sequence[tuple[Board, Policy, int]],
         epochs: int = 10,
         batch_size: int = 64,
+        l2_coefficient: float = 1e-4,  # TODO: verify this
     ) -> None:
-        optimizer = torch.optim.Adam(self.nnet.parameters())
+        """
+        Train on a bunch of examples.
+
+        Args:
+            examples: Pre-shuffled sequence of examples, where each is a tuple
+                of canonical board, policy logits, player won (1) or lost (-1).
+            epochs: Number of epochs.
+            batch_size: Batch size.
+            l2_coefficient: Coefficient for L2 regularization.
+                To defeat L2 regularization set to 0.0.
+                Default was chosen to match default of
+                https://jonathan-laurent.github.io/AlphaZero.jl/dev/reference/params/.
+        """
+        optimizer = torch.optim.Adam(
+            self.nnet.parameters(), weight_decay=l2_coefficient
+        )
         self.nnet.train()
 
-        # TODO
+        for epoch in range(1, epochs + 1):
+            pi_losses, v_losses = AverageMeter(), AverageMeter()
+
+            t = tqdm(
+                range(math.ceil(len(examples) / batch_size)), desc=f"Epoch {epoch}"
+            )
+            for i in t:
+                boards, pis, vs = list(
+                    zip(*examples[i * batch_size : (i + 1) * batch_size])
+                )
+                # FloatTensor is needed for gradient
+                out_pi, out_v = self.nnet(torch.FloatTensor(embed(*boards)))
+                # TODO: move to torch functions for this
+                target_pis = torch.FloatTensor(pis)
+                l_pi = self.loss_pi(target_pis, out_pi)
+                l_v = nn.functional.mse_loss(torch.FloatTensor(vs), out_v.reshape(-1))
+                pi_losses.update(val=l_pi.item(), n=len(boards))
+                v_losses.update(val=l_v.item(), n=len(boards))
+                # TODO: check how this looks
+                t.set_postfix(policy_loss=pi_losses, value_loss=v_losses)
+
+                optimizer.zero_grad()
+                torch.Tensor.backward(l_pi + l_v)  # Backprop on total loss
+                optimizer.step()
+
+    # TODO: remove
+    def loss_pi(self, targets: torch.Tensor, outputs: torch.Tensor):
+        return -torch.sum(targets * outputs) / targets.size()[0]
 
     def predict(self, board: Board) -> tuple[Policy, float]:
         """
@@ -152,11 +200,10 @@ class NNetWrapper(NeuralNet):
         Returns:
             Two-tuple of policy logits, expected value.
         """
-        # FloatTensor is needed for gradient
-        batch_embedding = torch.FloatTensor(embed_board(board, add_batch_dim=True))
         self.nnet.eval()
         with torch.no_grad():
-            pi, v = self.nnet(batch_embedding)
+            # FloatTensor is needed for gradient
+            pi, v = self.nnet(torch.FloatTensor(embed(board)))
         hi = pi[0].numpy(), float(v[0])  # Unbatch
         assert all((hi[0] >= 0) & (hi[0] <= 1)), f"Negative logprob in {hi[0]}."
         return hi
