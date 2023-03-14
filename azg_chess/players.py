@@ -6,13 +6,18 @@ from typing import TYPE_CHECKING, NamedTuple, Protocol, TypeVar
 import chess
 import chess.engine
 import numpy as np
+import torch
 from azg.MCTS import MCTS
 from azg.utils import dotdict
+from src.alpha_net import ChessNet
+from src.MCTS_chess import UCT_search
 
 from azg_chess.game import WHITE_PLAYER, Board, action_to_move, move_to_action
 from azg_chess.nn import NNetWrapper
 
 if TYPE_CHECKING:
+    from src.chess_board import board as ChessBoard
+
     from azg_chess.game import ActionIndex, ChessGame, PlayerID
 
 
@@ -149,3 +154,30 @@ class AlphaZeroChessPlayer(ChessPlayer):
 
     def __call__(self, board: Board) -> ActionIndex:
         return np.argmax(self._mcts.getActionProb(board, temp=0))
+
+
+class AlphaZeroGeochriChessPlayer(ChessPlayer):
+    """Player based on https://github.com/geochri/AlphaZero_Chess."""
+
+    def __init__(
+        self, player_id: PlayerID = WHITE_PLAYER, parameters_file: str | None = None
+    ):
+        super().__init__(player_id)
+        self._nnet = ChessNet()
+        if parameters_file is not None:
+            checkpoint = torch.load(f=parameters_file)
+            self._nnet.load_state_dict(checkpoint["model_state_dict"])
+
+    @staticmethod
+    def to_chess_move(move) -> chess.Move:
+        """Convert a move representation from geochri to chess."""
+        raise NotImplementedError
+
+    @staticmethod
+    def to_geochri_board(board: Board) -> ChessBoard:
+        """Convert a board representation from chess to geochri."""
+        raise NotImplementedError
+
+    def choose_move(self, board: Board) -> chess.Move:
+        best_move, _ = UCT_search(self.to_geochri_board(board), 777, self._nnet)
+        return self.to_chess_move(best_move)
