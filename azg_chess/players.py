@@ -160,13 +160,17 @@ class AlphaZeroGeochriChessPlayer(ChessPlayer):
     """Player based on https://github.com/geochri/AlphaZero_Chess."""
 
     def __init__(
-        self, player_id: PlayerID = WHITE_PLAYER, parameters_file: str | None = None
+        self,
+        player_id: PlayerID = WHITE_PLAYER,
+        parameters_file: str | None = None,
+        mcts_steps_per_move: int = 777,
     ):
         super().__init__(player_id)
         self._nnet = ChessNet()
         if parameters_file is not None:
             checkpoint = torch.load(f=parameters_file)
             self._nnet.load_state_dict(checkpoint["model_state_dict"])
+        self.mcts_steps_per_move = mcts_steps_per_move
 
     @staticmethod
     def to_chess_move(move) -> chess.Move:
@@ -179,5 +183,9 @@ class AlphaZeroGeochriChessPlayer(ChessPlayer):
         raise NotImplementedError
 
     def choose_move(self, board: Board) -> chess.Move:
-        best_move, _ = UCT_search(self.to_geochri_board(board), 777, self._nnet)
+        best_move, _ = UCT_search(
+            self.to_geochri_board(board),
+            num_reads=self.mcts_steps_per_move,
+            net=self._nnet,
+        )
         return self.to_chess_move(best_move)
