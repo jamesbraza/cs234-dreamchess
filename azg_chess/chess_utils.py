@@ -49,3 +49,6 @@ def make_display_func(
 ) -> "Callable[[chess.Board], None]":
     """Get a function to display a board."""
     return lambda b: print_func(to_display(b, **to_display_kwargs))
+
+
+pprint = make_display_func(verbosity=2)  # For convenience
