@@ -66,6 +66,8 @@ def conv3d_calc(
 
 
 class NNet(nn.Module):
+    """Neural network takes in a board embedding to predict policy logits and value."""
+
     KERNEL_SIZE = 3  # Square
 
     def __init__(self, game: ChessGame, num_channels: int = 64, dropout_p: float = 0.5):
@@ -123,7 +125,7 @@ class NNet(nn.Module):
 
 
 class NNetWrapper(NeuralNet):
-    """Neural network adaptation for chess."""
+    """Neural network wrapper adaptation for chess."""
 
     def __init__(self, game: ChessGame, **nnet_kwargs):
         super().__init__(game)

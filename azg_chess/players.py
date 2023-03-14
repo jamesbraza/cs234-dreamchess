@@ -126,7 +126,7 @@ class MCTSArgs(NamedTuple):
 
 
 class AlphaZeroChessPlayer(ChessPlayer):
-    """Players whose decides via a trained AlphaGo Zero-style network."""
+    """Player whose decides via a trained AlphaGo Zero-style network."""
 
     DEFAULT_MCTS_ARGS = MCTSArgs()
 
