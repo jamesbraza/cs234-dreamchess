@@ -225,6 +225,6 @@ class TestChessUtils:
         p2_elo: int,
         winner: Literal[-1, 0, 1],
         k: int,
-        expected,
+        expected: tuple[int, int],
     ) -> None:
         assert update_elo(p1_elo, p2_elo, winner, k) == expected
