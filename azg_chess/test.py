@@ -167,8 +167,8 @@ class CoachArgs(MCTSArgs):
 
     # Number of training iterations
     numIters: int = 1000
-    # Number of self-play games per training iteration
-    numEps: int = 5
+    # Number of self-play games (episodes) per training iteration
+    numEps: int = 100
     # Number of iterations to pass before increasing MCTS temp by 1
     tempThreshold: int = 15
     # Threshold win percentage of arena games to accept a new neural network
