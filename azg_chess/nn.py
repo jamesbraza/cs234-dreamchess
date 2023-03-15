@@ -35,7 +35,7 @@ def embed(*boards: Board) -> npt.NDArray[int]:
     Returns:
         Embedded representation of the board of shape (B, 8, 8, 6), where B is
             the batch size (number passed in), white is 1, black is -1, no
-            piece is 0, and layers are pawns (0), knight (1), bishop (2),
+            piece is 0, and players are pawn (0), knight (1), bishop (2),
             rook (3), queen (4), and king (5).
     """
     embedding = np.zeros((len(boards), *EMBEDDING_SHAPE), dtype=int)
@@ -167,7 +167,8 @@ class NNetWrapper(NeuralNet):
             pi_losses, v_losses = AverageMeter(), AverageMeter()
 
             t = tqdm(
-                range(math.ceil(len(examples) / batch_size)), desc=f"Epoch {epoch}"
+                range(math.ceil(len(examples) / batch_size)),
+                desc=f"Epoch {epoch}/{epochs}",
             )
             for i in t:
                 boards, true_pis, true_vs = list(
