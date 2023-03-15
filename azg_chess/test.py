@@ -9,7 +9,7 @@ import pytest
 from azg.Arena import Arena
 from azg.Coach import Coach
 
-from azg_chess.chess_utils import ICC_K_FACTOR, get_k_factor, update_elo
+from azg_chess.chess_utils import ICC_K_FACTOR, Elo, get_k_factor, update_elo
 from azg_chess.game import (
     BLACK_PLAYER,
     BOARD_DIMENSIONS,
@@ -22,7 +22,12 @@ from azg_chess.game import (
     PlayerID,
 )
 from azg_chess.nn import NNetWrapper
-from azg_chess.players import AlphaZeroChessPlayer, MCTSArgs, StockfishChessPlayer
+from azg_chess.players import (
+    AlphaZeroChessPlayer,
+    ChessPlayer,
+    MCTSArgs,
+    StockfishChessPlayer,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -200,15 +205,48 @@ class TestNNet:
         az_player = AlphaZeroChessPlayer(
             chess_game, player_id=WHITE_PLAYER, mcts_args=mcts_args
         )
-        black_player = StockfishChessPlayer(BLACK_PLAYER, engine_elo=1400)
+
+        win_percentage = self.play_against_stockfish(
+            chess_game, az_player, StockfishChessPlayer(BLACK_PLAYER, engine_elo=1400)
+        )
+        assert 0.0 <= win_percentage <= 1.0
+
+    @staticmethod
+    def play_against_stockfish(
+        chess_game: ChessGame,
+        unknown_player: ChessPlayer,
+        stockfish_player: StockfishChessPlayer,
+        n_games: int = 10,
+        verbose: bool = False,
+    ) -> float:
+        assert unknown_player.id * -1 == stockfish_player.id
+
         arena = Arena(
-            player1=az_player,
-            player2=black_player,
+            unknown_player,
+            player2=stockfish_player,
             game=chess_game,
             display=partial(chess_game.display, verbosity=2),
         )
-        n_p1_wins, n_p2_wins, n_ties = arena.playGames(2, verbose=True)
-        # TODO: add assertions
+        n_p1_wins, n_p2_wins, _ = arena.playGames(n_games, verbose)
+        return n_p1_wins / (n_p1_wins + n_p2_wins)
+
+    @staticmethod
+    def play_game_update_elo(
+        chess_game: ChessGame,
+        p1_p1elo: tuple[ChessPlayer, Elo],
+        p2_p2elo: tuple[ChessPlayer, Elo],
+        k_factor: int = ICC_K_FACTOR,
+        verbose: bool = False,
+    ) -> tuple[Elo, Elo]:
+        (p1, p1_elo), (p2, p2_elo) = p1_p1elo, p2_p2elo
+        assert p1.id == WHITE_PLAYER
+        assert p2.id == BLACK_PLAYER
+
+        arena = Arena(
+            p1, p2, game=chess_game, display=partial(chess_game.display, verbosity=2)
+        )
+        winner_id: Literal[-1, 0, 1] = arena.playGame(verbose)
+        return update_elo(p1_elo, p2_elo, winner_id, k_factor)
 
 
 class TestChessUtils:
@@ -221,10 +259,10 @@ class TestChessUtils:
     )
     def test_update_elo(
         self,
-        p1_elo: int,
-        p2_elo: int,
+        p1_elo: Elo,
+        p2_elo: Elo,
         winner: Literal[-1, 0, 1],
         k: int,
-        expected: tuple[int, int],
+        expected: tuple[Elo, Elo],
     ) -> None:
         assert update_elo(p1_elo, p2_elo, winner, k) == expected
