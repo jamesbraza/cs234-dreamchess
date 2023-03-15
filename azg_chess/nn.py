@@ -7,10 +7,10 @@ from typing import TYPE_CHECKING
 import chess
 import numpy as np
 import torch
+import torch.utils.tensorboard
 from azg.NeuralNet import NeuralNet
 from azg.utils import AverageMeter
 from torch import nn
-from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from azg_chess.game import BOARD_DIMENSIONS, NUM_PIECES
@@ -181,14 +181,14 @@ class NNetWrapper(NeuralNet):
         optimizer = torch.optim.Adam(
             self.nnet.parameters(), weight_decay=l2_coefficient
         )
-        writer = SummaryWriter()
+        writer = torch.utils.tensorboard.SummaryWriter()
         self.nnet.train()
 
         for epoch in range(epochs):
             train_losses_pi, train_losses_v = AverageMeter(), AverageMeter()
             # NOTE: give partial batch contents to validation set
             num_batches = int(len(examples) / batch_size)
-            t = tqdm(range(num_batches - 1), desc=f"Epoch {epoch}/{epochs}")
+            t = tqdm(range(num_batches - 1), desc=f"Epoch {epoch + 1}/{epochs}")
             for i in t:
                 loss_pi, loss_v, loss_total = self._calculate_losses(
                     *list(zip(*examples[i * batch_size : (i + 1) * batch_size]))
