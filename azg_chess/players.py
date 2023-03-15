@@ -140,6 +140,7 @@ class AlphaZeroChessPlayer(ChessPlayer):
     ):
         super().__init__(player_id)
         self._nnet = NNetWrapper(game, **nnet_wrapper_kwargs)
+        self._nnet.nnet.eval()  # Place into eval mode
         if parameters_path is not None:
             self._nnet.load_checkpoint(*parameters_path)
         self._mcts = MCTS(game, self._nnet, mcts_args)
