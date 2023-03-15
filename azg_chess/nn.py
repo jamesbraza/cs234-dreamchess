@@ -162,7 +162,7 @@ class NNetWrapper(NeuralNet):
         examples: Sequence[tuple[Board, Policy, float]],
         epochs: int = 10,
         batch_size: int = 64,
-        l2_coefficient: float = 1e-4,  # TODO: verify this
+        l2_coefficient: float = 1e-4,
     ) -> None:
         """
         Train on a bunch of examples.
