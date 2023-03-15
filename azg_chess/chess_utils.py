@@ -56,6 +56,31 @@ pprint = make_display_func(verbosity=2)  # For convenience
 ICC_K_FACTOR = 32
 
 
+def get_k_factor(p1_elo: int, p2_elo: int, org: str = "icc") -> int:
+    """
+    Get a K-factor per a chess organization's standard.
+
+    SEE: https://en.wikipedia.org/wiki/Elo_rating_system#Most_accurate_K-factor
+
+    Args:
+        p1_elo: Player 1's Elo.
+        p2_elo: Player 2's Elo.
+        org: Organization standard to use (ICC or USCF).
+
+    Returns:
+        K-factor value.
+    """
+    if org.lower() == "icc":
+        return ICC_K_FACTOR
+    if org.lower() == "uscf":
+        if max(p1_elo, p2_elo) < 2100:
+            return 32
+        if max(p1_elo, p2_elo) < 2400:
+            return 24
+        return 16
+    raise NotImplementedError(f"Unimplemented {org=}.")
+
+
 def update_elo(
     p1_elo: int, p2_elo: int, winner: Literal[-1, 0, 1], k: int = ICC_K_FACTOR
 ) -> tuple[int, int]:

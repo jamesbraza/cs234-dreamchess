@@ -9,7 +9,7 @@ import pytest
 from azg.Arena import Arena
 from azg.Coach import Coach
 
-from azg_chess.chess_utils import ICC_K_FACTOR, update_elo
+from azg_chess.chess_utils import ICC_K_FACTOR, get_k_factor, update_elo
 from azg_chess.game import (
     BLACK_PLAYER,
     BOARD_DIMENSIONS,
@@ -215,7 +215,7 @@ class TestChessUtils:
     @pytest.mark.parametrize(
         ("p1_elo", "p2_elo", "winner", "k", "expected"),
         [
-            (2400, 2000, 1, ICC_K_FACTOR, (2403, 1997)),
+            (2400, 2000, 1, get_k_factor(2400, 2000), (2403, 1997)),
             (2400, 2000, -1, ICC_K_FACTOR, (2371, 2029)),
         ],
     )
