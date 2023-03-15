@@ -67,12 +67,28 @@ def conv_conversion(
     )
 
 
+class ResidualBlock(nn.Module):
+    """Basic residual block based on two Conv3d with BatchNorms."""
+
+    def __init__(self, in_channels: int = 256, out_channels: int = 256, **conv_kwargs):
+        super().__init__()
+        conv_kwargs = {"kernel_size": 3, "padding": 1} | conv_kwargs
+        self.non_residual = nn.Sequential(
+            nn.Conv3d(in_channels, out_channels, **conv_kwargs),
+            nn.BatchNorm3d(out_channels),
+            nn.ReLU(),
+            nn.Conv3d(out_channels, out_channels, **conv_kwargs),
+            nn.BatchNorm3d(out_channels),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return nn.functional.relu(x + self.non_residual(x))
+
+
 class NNet(nn.Module):
     """Neural network takes in a board embedding to predict policy logits and value."""
 
-    KERNEL_SIZE = 3  # Square
-
-    def __init__(self, game: ChessGame, num_channels: int = 64, dropout_p: float = 0.5):
+    def __init__(self, game: ChessGame, num_channels: int = 64, dropout_p: float = 0.8):
         """
         Initialize.
 
@@ -83,27 +99,22 @@ class NNet(nn.Module):
         """
         super().__init__()
         self.conv_layers = nn.Sequential(
-            nn.Conv3d(1, num_channels, self.KERNEL_SIZE, padding="same"),
+            nn.Conv3d(1, num_channels, 3, padding="same"),
             nn.BatchNorm3d(num_channels),
             nn.ReLU(),
-            nn.Conv3d(num_channels, num_channels, self.KERNEL_SIZE, padding="same"),
-            nn.BatchNorm3d(num_channels),
-            nn.ReLU(),
-            nn.Conv3d(num_channels, num_channels, self.KERNEL_SIZE),
-            nn.BatchNorm3d(num_channels),
-            nn.ReLU(),
-            nn.Conv3d(num_channels, num_channels, self.KERNEL_SIZE),
+            ResidualBlock(num_channels, num_channels),
+            ResidualBlock(num_channels, num_channels),
+            nn.Conv3d(num_channels, num_channels, 3),
             nn.BatchNorm3d(num_channels),
             nn.ReLU(),
         )
         # NOTE: this matches the above sequential conv's hyperparameters
         assert game.getBoardSize() == EMBEDDING_SHAPE[1:]
-        conv_out_shape = conv_conversion(
-            conv_conversion(EMBEDDING_SHAPE, self.KERNEL_SIZE),
-            self.KERNEL_SIZE,
+        self._fc_layers_shape = num_channels * math.prod(
+            conv_conversion(EMBEDDING_SHAPE, 3)
         )
-        self._fc_layers_shape = num_channels * math.prod(conv_out_shape)
         self.fc_layers = nn.Sequential(
+            nn.Flatten(),
             nn.Linear(self._fc_layers_shape, 1024),
             nn.BatchNorm1d(1024),
             nn.Dropout(dropout_p),
@@ -111,8 +122,13 @@ class NNet(nn.Module):
             nn.BatchNorm1d(512),
             nn.Dropout(dropout_p),
         )
-        # NOTE: leave as raw scores to directly use nn.functional.cross_entropy
-        self.policy_head = nn.Linear(512, game.getActionSize())
+        # NOTE: leave pi as raw scores to directly use nn.functional.cross_entropy
+        self.policy_head = nn.Sequential(
+            nn.Linear(512, 512),
+            nn.BatchNorm1d(512),
+            nn.ReLU(),
+            nn.Linear(512, game.getActionSize()),
+        )
         self.value_head = nn.Sequential(nn.Linear(512, 1), nn.Tanh())
 
     def forward(self, board: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -127,7 +143,6 @@ class NNet(nn.Module):
         """
         s = board.unsqueeze(1)  # B, 1, D, X, Y
         s = self.conv_layers(s)  # B, C, D - 2 * 2, X - 2 * 2, Y - 2 * 2
-        s = s.reshape(-1, self._fc_layers_shape)  # B, C * (D - 4) * (X - 4) * (Y - 4)
         s = self.fc_layers(s)  # B, 512
         return self.policy_head(s), self.value_head(s)  # (B, |A|), (B, 1)
 
