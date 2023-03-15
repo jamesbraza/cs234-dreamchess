@@ -10,6 +10,7 @@ import torch
 from azg.NeuralNet import NeuralNet
 from azg.utils import AverageMeter
 from torch import nn
+from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from azg_chess.game import BOARD_DIMENSIONS, NUM_PIECES
@@ -138,9 +139,27 @@ class NNetWrapper(NeuralNet):
         super().__init__(game)
         self.nnet = NNet(game, **nnet_kwargs)
 
+    def _calculate_losses(
+        self,
+        boards: Sequence[Board],
+        true_pis: Sequence[Policy],
+        true_vs: Sequence[float],
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Calculate pi, V, and total loss given example data."""
+        # FloatTensor is needed for gradient
+        pred_pis, pred_vs = self.nnet(torch.FloatTensor(embed(*boards)))
+        loss_pi = nn.functional.cross_entropy(
+            input=pred_pis, target=torch.FloatTensor(true_pis)
+        )
+        loss_v = nn.functional.mse_loss(
+            input=pred_vs.reshape(-1),
+            target=torch.FloatTensor(true_vs),
+        )
+        return loss_pi, loss_v, loss_pi + loss_v
+
     def train(  # pylint: disable=too-many-locals
         self,
-        examples: Sequence[tuple[Board, Policy, int]],
+        examples: Sequence[tuple[Board, Policy, float]],
         epochs: int = 10,
         batch_size: int = 64,
         l2_coefficient: float = 1e-4,  # TODO: verify this
@@ -150,7 +169,8 @@ class NNetWrapper(NeuralNet):
 
         Args:
             examples: Pre-shuffled sequence of examples, where each is a tuple
-                of canonical board, policy logits, player won (1) or lost (-1).
+                of canonical board, policy logits, player won (1) or lost (-1),
+                or tie (+/- 1e-5).
             epochs: Number of epochs.
             batch_size: Batch size.
             l2_coefficient: Coefficient for L2 regularization.
@@ -161,35 +181,39 @@ class NNetWrapper(NeuralNet):
         optimizer = torch.optim.Adam(
             self.nnet.parameters(), weight_decay=l2_coefficient
         )
+        writer = SummaryWriter()
         self.nnet.train()
 
-        for epoch in range(1, epochs + 1):
+        for epoch in range(epochs):
             pi_losses, v_losses = AverageMeter(), AverageMeter()
-
-            t = tqdm(
-                range(math.ceil(len(examples) / batch_size)),
-                desc=f"Epoch {epoch}/{epochs}",
-            )
+            # NOTE: give partial batch contents to validation set
+            num_batches = int(len(examples) / batch_size)
+            t = tqdm(range(num_batches - 1), desc=f"Epoch {epoch}/{epochs}")
             for i in t:
-                boards, true_pis, true_vs = list(
-                    zip(*examples[i * batch_size : (i + 1) * batch_size])
+                loss_pi, loss_v, loss_total = self._calculate_losses(
+                    *list(zip(*examples[i * batch_size : (i + 1) * batch_size]))
                 )
-                # FloatTensor is needed for gradient
-                pred_pis, pred_vs = self.nnet(torch.FloatTensor(embed(*boards)))
-                l_pi = nn.functional.cross_entropy(
-                    input=pred_pis, target=torch.FloatTensor(true_pis)
-                )
-                l_v = nn.functional.mse_loss(
-                    input=pred_vs.reshape(-1),
-                    target=torch.FloatTensor(true_vs),
-                )
-                pi_losses.update(val=l_pi.item(), n=len(boards))
-                v_losses.update(val=l_v.item(), n=len(boards))
+                optimizer.zero_grad()
+                loss_total.backward()
+                optimizer.step()
+                pi_losses.update(val=loss_pi.item(), n=batch_size)
+                v_losses.update(val=loss_v.item(), n=batch_size)
                 t.set_postfix(pi_loss=pi_losses, v_loss=v_losses)
 
-                optimizer.zero_grad()
-                torch.Tensor.backward(l_pi + l_v)  # Backprop on total loss
-                optimizer.step()
+            # Use remaining examples as a validation set
+            loss_pi, loss_v, _ = self._calculate_losses(
+                *list(zip(*examples[(num_batches - 1) * batch_size :]))
+            )
+            writer.add_scalars(
+                "loss",
+                {
+                    "loss/train_pi": pi_losses.avg,
+                    "loss/train_V": v_losses.avg,
+                    "loss/val_pi": loss_pi,
+                    "loss/val_V": loss_v,
+                },
+                epoch,
+            )
 
     def predict(self, board: Board) -> tuple[Policy, float]:
         """
