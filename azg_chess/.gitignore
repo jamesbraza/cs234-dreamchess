@@ -1,2 +1,3 @@
-# Directory of model checkpoints from training
+# Directory of model checkpoints and TensorBoard events from training
 checkpoints/
+runs/

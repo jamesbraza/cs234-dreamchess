@@ -1,4 +1,7 @@
 chess
-kaggle
-stockfish
+coloredlogs  # azg internals
+kaggle  # Cloning data
+numpy>=1.21  # For numpy.typing
+tensorboard
 torch
+tqdm
