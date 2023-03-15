@@ -1,5 +1,5 @@
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import chess
 
@@ -52,3 +52,54 @@ def make_display_func(
 
 
 pprint = make_display_func(verbosity=2)  # For convenience
+
+ICC_K_FACTOR = 32
+
+
+def get_k_factor(p1_elo: int, p2_elo: int, org: str = "icc") -> int:
+    """
+    Get a K-factor per a chess organization's standard.
+
+    SEE: https://en.wikipedia.org/wiki/Elo_rating_system#Most_accurate_K-factor
+
+    Args:
+        p1_elo: Player 1's Elo.
+        p2_elo: Player 2's Elo.
+        org: Organization standard to use (ICC or USCF).
+
+    Returns:
+        K-factor value.
+    """
+    if org.lower() == "icc":
+        return ICC_K_FACTOR
+    if org.lower() == "uscf":
+        if max(p1_elo, p2_elo) < 2100:
+            return 32
+        if max(p1_elo, p2_elo) < 2400:
+            return 24
+        return 16
+    raise NotImplementedError(f"Unimplemented {org=}.")
+
+
+def update_elo(
+    p1_elo: int, p2_elo: int, winner: Literal[-1, 0, 1], k: int = ICC_K_FACTOR
+) -> tuple[int, int]:
+    """
+    Calculate the new Elo for P1 and P2 after the match.
+
+    SEE: https://metinmediamath.wordpress.com/2013/11/27/how-to-calculate-the-elo-rating-including-example/
+
+    Args:
+        p1_elo: Player 1's original Elo.
+        p2_elo: Player 2's original Elo.
+        winner: Match outcome, 1 if P1 won, 0 if a tie, -1 if P2 won.
+        k: K-factor for match weight.
+
+    Returns:
+        Two tuple of new Elo for player 1 and player 2.
+    """
+    r1, r2 = 10 ** (p1_elo / 400), 10 ** (p2_elo / 400)
+    sum_r = r1 + r2
+    e1, e2 = r1 / sum_r, r2 / sum_r
+    s1, s2 = 0.5 * winner + 0.5, -0.5 * winner + 0.5
+    return round(p1_elo + k * (s1 - e1)), round(p2_elo + k * (s2 - e2))
