@@ -234,8 +234,6 @@ class GeochriPlayer(ChessPlayer):
         best_move, root = MCTS_chess.UCT_search(geochri_board, self.mcts_steps_per_move, self.net)
         i_pos, f_pos, prom = ed.decode_action(geochri_board,best_move)
 
-        print(i_pos, f_pos, prom)
-
         prom_piece = None
         if prom == 'K':
             prom_piece = chess.Piece(6, True)
@@ -262,7 +260,6 @@ class GeochriPlayer(ChessPlayer):
         to_square   = chess.parse_square(chr(f_pos[0][1]+97) + str(8-f_pos[0][0]))
 
         result_move = chess.Move(from_square, to_square, prom_piece,None)
-        assert result_move is not None, "Geochri didn't pick a move."
         return result_move
 
     def __del__(self) -> None:
