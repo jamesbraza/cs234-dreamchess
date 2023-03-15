@@ -1,7 +1,7 @@
 import math
 from functools import partial
 from operator import gt, lt
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 from unittest.mock import MagicMock, patch
 
 import chess
@@ -9,6 +9,7 @@ import pytest
 from azg.Arena import Arena
 from azg.Coach import Coach
 
+from azg_chess.chess_utils import ICC_K_FACTOR, update_elo
 from azg_chess.game import (
     BLACK_PLAYER,
     BOARD_DIMENSIONS,
@@ -208,3 +209,22 @@ class TestNNet:
         )
         n_p1_wins, n_p2_wins, n_ties = arena.playGames(2, verbose=True)
         # TODO: add assertions
+
+
+class TestChessUtils:
+    @pytest.mark.parametrize(
+        ("p1_elo", "p2_elo", "winner", "k", "expected"),
+        [
+            (2400, 2000, 1, ICC_K_FACTOR, (2403, 1997)),
+            (2400, 2000, -1, ICC_K_FACTOR, (2371, 2029)),
+        ],
+    )
+    def test_update_elo(
+        self,
+        p1_elo: int,
+        p2_elo: int,
+        winner: Literal[-1, 0, 1],
+        k: int,
+        expected,
+    ) -> None:
+        assert update_elo(p1_elo, p2_elo, winner, k) == expected
