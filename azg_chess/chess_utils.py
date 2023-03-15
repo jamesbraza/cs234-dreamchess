@@ -1,5 +1,5 @@
 import os
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, TypeAlias
 
 import chess
 
@@ -55,8 +55,10 @@ pprint = make_display_func(verbosity=2)  # For convenience
 
 ICC_K_FACTOR = 32
 
+Elo: TypeAlias = int
 
-def get_k_factor(p1_elo: int, p2_elo: int, org: str = "icc") -> int:
+
+def get_k_factor(p1_elo: Elo, p2_elo: Elo, org: str = "icc") -> int:
     """
     Get a K-factor per a chess organization's standard.
 
@@ -82,8 +84,8 @@ def get_k_factor(p1_elo: int, p2_elo: int, org: str = "icc") -> int:
 
 
 def update_elo(
-    p1_elo: int, p2_elo: int, winner: Literal[-1, 0, 1], k: int = ICC_K_FACTOR
-) -> tuple[int, int]:
+    p1_elo: Elo, p2_elo: Elo, winner: Literal[-1, 0, 1], k: int = ICC_K_FACTOR
+) -> tuple[Elo, Elo]:
     """
     Calculate the new Elo for P1 and P2 after the match.
 
