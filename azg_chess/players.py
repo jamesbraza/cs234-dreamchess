@@ -10,18 +10,11 @@ import torch
 from azg.MCTS import MCTS
 from azg.utils import dotdict
 
-import torch
-import geochri.src.alpha_net as an
-import geochri.src.chess_utils as cu
-import geochri.src.encoder_decoder as ed
-import geochri.src.MCTS_chess as MCTS_chess
-
+import geochri.src as geochri
 from azg_chess.game import WHITE_PLAYER, Board, action_to_move, move_to_action
 from azg_chess.nn import NNetWrapper
 
 if TYPE_CHECKING:
-    from geochri.src.chess_board import board as ChessBoard
-
     from azg_chess.game import ActionIndex, ChessGame, PlayerID
 
 
@@ -159,108 +152,54 @@ class AlphaZeroChessPlayer(ChessPlayer):
     def __call__(self, board: Board) -> ActionIndex:
         return np.argmax(self._mcts.getActionProb(board, temp=0))
 
-"""
-class AlphaZeroGeochriChessPlayer(ChessPlayer):
-    #Player based on https://github.com/geochri/AlphaZero_Chess.
+
+class GeochriPlayer(ChessPlayer):
+    """
+    Player whose decisions are made by the NN from the [Geochri repository][1].
+
+    [1]: https://github.com/geochri/AlphaZero_Chess
+    """
 
     def __init__(
         self,
         player_id: PlayerID = WHITE_PLAYER,
         parameters_file: str | None = None,
-        mcts_steps_per_move: int = 777,
-    ):
-        super().__init__(player_id)
-        self._nnet = ChessNet()
-        if parameters_file is not None:
-            checkpoint = torch.load(f=parameters_file)
-            self._nnet.load_state_dict(checkpoint["model_state_dict"])
-        self.mcts_steps_per_move = mcts_steps_per_move
-
-    @staticmethod
-    def to_chess_move(move) -> chess.Move:
-        #Convert a move representation from geochri to chess.
-        raise NotImplementedError
-
-    @staticmethod
-    def to_geochri_board(board: Board) -> ChessBoard:
-        #Convert a board representation from chess to geochri.
-        raise NotImplementedError
-
-    def choose_move(self, board: Board) -> chess.Move:
-        best_move, _ = UCT_search(
-            self.to_geochri_board(board),
-            num_reads=self.mcts_steps_per_move,
-            net=self._nnet,
-        )
-        return self.to_chess_move(best_move)
-"""
-
-class GeochriPlayer(ChessPlayer):
-    """
-    Player whose decisions are made by the NN based on Geochri repository.
-
-    https://github.com/geochri/AlphaZero_Chess
-    """
-
-    def __init__(
-        self,
-        player_id: PlayerID = WHITE_PLAYER,
-        nn_path: str = "",
         mcts_steps_per_move: int = 250,
     ):
         super().__init__(player_id)
         self.mcts_steps_per_move = mcts_steps_per_move
 
+        self._net = geochri.alpha_net.ChessNet()
         if torch.cuda.is_available():
-            checkpoint = torch.load(nn_path)
+            self._net.cuda()
+        self._net.share_memory()
+        self._net.eval()
+        if parameters_file is not None:
+            checkpoint = torch.load(
+                parameters_file,
+                map_location=None if torch.cuda.is_available() else torch.device("cpu"),
+            )
+            self._net.load_state_dict(checkpoint["state_dict"])
+
+    def choose_move(self, board: Board) -> chess.Move:
+        geochri_board = geochri.chess_utils.load_chessboard_to_Geochri(board)
+
+        best_move, _ = geochri.MCTS_chess.UCT_search(
+            geochri_board, num_reads=self.mcts_steps_per_move, net=self._net
+        )
+        i_pos, f_pos, prom = geochri.encoder_decoder.decode_action(
+            geochri_board, encoded=best_move
+        )
+
+        if prom in chess.PIECE_SYMBOLS:
+            index = chess.PIECE_SYMBOLS.index(prom)
+            promotion_piece = chess.Piece(chess.PIECE_TYPES[index], chess.BLACK)
+        elif prom.lower() in chess.PIECE_SYMBOLS:
+            index = chess.PIECE_SYMBOLS.index(prom.lower())
+            promotion_piece = chess.Piece(chess.PIECE_TYPES[index], chess.WHITE)
         else:
-            checkpoint = torch.load(nn_path, map_location=torch.device('cpu'))
+            promotion_piece = None
 
-        self.net = an.ChessNet()
-
-        cuda = torch.cuda.is_available()
-        if cuda:
-            self.net.cuda()
-
-        self.net.share_memory()
-        self.net.eval()
-        self.net.load_state_dict(checkpoint['state_dict'])
-
-
-    def choose_move(self, chess_board: chess.Board) -> chess.Move:
-
-        geochri_board = cu.load_chessboard_to_Geochri(chess_board)
-
-        best_move, root = MCTS_chess.UCT_search(geochri_board, self.mcts_steps_per_move, self.net)
-        i_pos, f_pos, prom = ed.decode_action(geochri_board,best_move)
-
-        prom_piece = None
-        if prom == 'K':
-            prom_piece = chess.Piece(6, True)
-        elif prom == 'Q':
-            prom_piece = chess.Piece(5, True)
-        elif prom == 'R':
-            prom_piece = chess.Piece(4, True)
-        elif prom == 'B':
-            prom_piece = chess.Piece(3, True)
-        elif prom == 'N':
-            prom_piece = chess.Piece(2, True)
-        elif prom == 'k':
-            prom_piece = chess.Piece(6, False)
-        elif prom == 'q':
-            prom_piece = chess.Piece(5, False)
-        elif prom == 'r':
-            prom_piece = chess.Piece(4, False)
-        elif prom == 'b':
-            prom_piece = chess.Piece(3, False)
-        elif prom == 'n':
-            prom_piece = chess.Piece(2, False)
-
-        from_square = chess.parse_square(chr(i_pos[0][1]+97) + str(8-i_pos[0][0]))
-        to_square   = chess.parse_square(chr(f_pos[0][1]+97) + str(8-f_pos[0][0]))
-
-        result_move = chess.Move(from_square, to_square, prom_piece,None)
-        return result_move
-
-    def __del__(self) -> None:
-        pass
+        from_square = chess.parse_square(chr(i_pos[0][1] + 97) + str(8 - i_pos[0][0]))
+        to_square = chess.parse_square(chr(f_pos[0][1] + 97) + str(8 - f_pos[0][0]))
+        return chess.Move(from_square, to_square, promotion_piece)
