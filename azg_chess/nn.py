@@ -185,7 +185,7 @@ class NNetWrapper(NeuralNet):
         self.nnet.train()
 
         for epoch in range(epochs):
-            pi_losses, v_losses = AverageMeter(), AverageMeter()
+            train_losses_pi, train_losses_v = AverageMeter(), AverageMeter()
             # NOTE: give partial batch contents to validation set
             num_batches = int(len(examples) / batch_size)
             t = tqdm(range(num_batches - 1), desc=f"Epoch {epoch}/{epochs}")
@@ -196,9 +196,9 @@ class NNetWrapper(NeuralNet):
                 optimizer.zero_grad()
                 loss_total.backward()
                 optimizer.step()
-                pi_losses.update(val=loss_pi.item(), n=batch_size)
-                v_losses.update(val=loss_v.item(), n=batch_size)
-                t.set_postfix(pi_loss=pi_losses, v_loss=v_losses)
+                train_losses_pi.update(val=loss_pi.item(), n=batch_size)
+                train_losses_v.update(val=loss_v.item(), n=batch_size)
+                t.set_postfix(pi_loss=train_losses_pi, v_loss=train_losses_v)
 
             # Use remaining examples as a validation set
             loss_pi, loss_v, _ = self._calculate_losses(
@@ -207,10 +207,10 @@ class NNetWrapper(NeuralNet):
             writer.add_scalars(
                 "loss",
                 {
-                    "loss/train_pi": pi_losses.avg,
-                    "loss/train_V": v_losses.avg,
-                    "loss/val_pi": loss_pi,
-                    "loss/val_V": loss_v,
+                    "train_pi": train_losses_pi.avg,
+                    "train_V": train_losses_v.avg,
+                    "val_pi": loss_pi,
+                    "val_V": loss_v,
                 },
                 epoch,
             )
