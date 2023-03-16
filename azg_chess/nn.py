@@ -28,7 +28,7 @@ EMBEDDING_SHAPE: tuple[int, int, int] = NUM_PIECES, *BOARD_DIMENSIONS
 
 def embed(*boards: Board) -> npt.NDArray[int]:
     """
-    Embed the boards for input to a neural network.
+    Embed the input boards into a numpy array.
 
     Args:
         boards: Variable amount of Boards to embed.
@@ -93,7 +93,7 @@ class NNet(nn.Module):
         Initialize.
 
         Args:
-            game: Game, to extract board dimensions and action sizes.
+            game: Game, to extract action sizes and confirm board size.
             num_channels: Number of channels for beginning Conv3d's.
             dropout_p: Dropout percentage.
         """
@@ -108,7 +108,8 @@ class NNet(nn.Module):
             nn.BatchNorm3d(num_channels),
             nn.ReLU(),
         )
-        # NOTE: this matches the above sequential conv's hyperparameters
+        # NOTE: confirm this matches, as otherwise the fully-connected layers'
+        # input shape would not be correct
         assert game.getBoardSize() == EMBEDDING_SHAPE[1:]
         self._fc_layers_in_shape = num_channels * math.prod(
             conv_conversion(EMBEDDING_SHAPE, 3)
@@ -132,17 +133,23 @@ class NNet(nn.Module):
             nn.Tanh(),
         )
 
-    def forward(self, board: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    @classmethod
+    def embed(cls, *boards: Board) -> torch.Tensor:
+        """Embed the input boards into a Tensor for the forward pass."""
+        # FloatTensor is needed for gradient computations
+        return torch.FloatTensor(embed(*boards))
+
+    def forward(self, boards: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Run a forward pass on embedded board batch, getting policy scores and value.
 
         Args:
-            board: Embedded canonical board batch of shape (B, D, X, Y).
+            boards: Embedded canonical board batch of shape (B, D, X, Y).
 
         Returns:
             Tuple of policy scores of shape (B, |A|), value in [-1, 1] of shape (B, 1).
         """
-        s = board.unsqueeze(1)  # B, 1, D, X, Y
+        s = boards.unsqueeze(1)  # B, 1, D, X, Y
         s = self.conv_layers(s)  # B, C, D - 2 * 2, X - 2 * 2, Y - 2 * 2
         s = self.fc_layers(s)  # B, |A|
         return self.policy_head(s), self.value_head(s)  # (B, |A|), (B, 1)
@@ -162,8 +169,7 @@ class NNetWrapper(NeuralNet):
         true_vs: Sequence[float],
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Calculate pi, V, and total loss given example data."""
-        # FloatTensor is needed for gradient
-        pred_pis, pred_vs = self.nnet(torch.FloatTensor(embed(*boards)))
+        pred_pis, pred_vs = self.nnet(self.nnet.embed(*boards))
         loss_pi = nn.functional.cross_entropy(
             input=pred_pis, target=torch.FloatTensor(true_pis)
         )
@@ -243,8 +249,7 @@ class NNetWrapper(NeuralNet):
         """
         self.nnet.eval()
         with torch.no_grad():
-            # FloatTensor is needed for gradient
-            pi, v = self.nnet(torch.FloatTensor(embed(board)))
+            pi, v = self.nnet(self.nnet.embed(board))
         # NOTE: [0] is to unbatch
         return nn.functional.softmax(pi, dim=1)[0].numpy(), float(v[0])
 
