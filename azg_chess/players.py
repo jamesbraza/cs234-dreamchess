@@ -5,12 +5,12 @@ from typing import TYPE_CHECKING, NamedTuple, Protocol, TypeVar
 
 import chess
 import chess.engine
+import geochri.src as geochri
 import numpy as np
 import torch
 from azg.MCTS import MCTS
 from azg.utils import dotdict
 
-import geochri.src as geochri
 from azg_chess.game import WHITE_PLAYER, Board, action_to_move, move_to_action
 from azg_chess.nn import NNetWrapper
 
@@ -200,6 +200,8 @@ class GeochriPlayer(ChessPlayer):
         else:
             promotion_piece = None
 
-        from_square = chess.parse_square(chr(i_pos[0][1] + 97) + str(8 - i_pos[0][0]))
-        to_square = chess.parse_square(chr(f_pos[0][1] + 97) + str(8 - f_pos[0][0]))
+        from_square, to_square = (
+            chess.parse_square(chr(pos[0][1] + ord("a")) + str(8 - pos[0][0]))
+            for pos in (i_pos, f_pos)
+        )
         return chess.Move(from_square, to_square, promotion_piece)
