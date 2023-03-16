@@ -28,23 +28,23 @@ EMBEDDING_SHAPE: tuple[int, int, int] = NUM_PIECES, *BOARD_DIMENSIONS
 
 def embed(*boards: Board) -> npt.NDArray[int]:
     """
-    Embed the boards for input to a neural network.
+    Embed the input boards into a numpy array.
 
     Args:
         boards: Variable amount of Boards to embed.
 
     Returns:
-        Embedded representation of the board of shape (B, 8, 8, 6), where B is
+        Embedded representation of the board of shape (B, 6, 8, 8), where B is
             the batch size (number passed in), white is 1, black is -1, no
             piece is 0, and players are pawn (0), knight (1), bishop (2),
             rook (3), queen (4), and king (5).
     """
-    embedding = np.zeros((len(boards), *EMBEDDING_SHAPE), dtype=int)
+    batch_embedding = np.zeros((len(boards), *EMBEDDING_SHAPE), dtype=int)
     for i, board in enumerate(boards):
         for sq, pc in board.piece_map().items():
             bxyz = i, pc.piece_type - 1, chess.square_rank(sq), chess.square_file(sq)
-            embedding[bxyz] = 1 if pc.color else -1
-    return embedding
+            batch_embedding[bxyz] = 1 if pc.color else -1
+    return batch_embedding
 
 
 def conv_conversion(
@@ -67,68 +67,91 @@ def conv_conversion(
     )
 
 
+class ResidualBlock(nn.Module):
+    """Basic residual block based on two Conv3d with BatchNorms."""
+
+    def __init__(self, in_channels: int, out_channels: int, **conv_kwargs):
+        super().__init__()
+        conv_kwargs = {"kernel_size": 3, "padding": 1} | conv_kwargs
+        self.non_residual = nn.Sequential(
+            nn.Conv3d(in_channels, out_channels, **conv_kwargs),
+            nn.BatchNorm3d(out_channels),
+            nn.ReLU(),
+            nn.Conv3d(out_channels, out_channels, **conv_kwargs),
+            nn.BatchNorm3d(out_channels),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return nn.functional.relu(x + self.non_residual(x))
+
+
 class NNet(nn.Module):
     """Neural network takes in a board embedding to predict policy logits and value."""
 
-    KERNEL_SIZE = 3  # Square
-
-    def __init__(self, game: ChessGame, num_channels: int = 64, dropout_p: float = 0.5):
+    def __init__(self, game: ChessGame, num_channels: int = 64, dropout_p: float = 0.8):
         """
         Initialize.
 
         Args:
-            game: Game, to extract board dimensions and action sizes.
+            game: Game, to extract action sizes and confirm board size.
             num_channels: Number of channels for beginning Conv3d's.
             dropout_p: Dropout percentage.
         """
         super().__init__()
         self.conv_layers = nn.Sequential(
-            nn.Conv3d(1, num_channels, self.KERNEL_SIZE, padding="same"),
+            nn.Conv3d(1, num_channels, 3, padding="same"),
             nn.BatchNorm3d(num_channels),
             nn.ReLU(),
-            nn.Conv3d(num_channels, num_channels, self.KERNEL_SIZE, padding="same"),
-            nn.BatchNorm3d(num_channels),
-            nn.ReLU(),
-            nn.Conv3d(num_channels, num_channels, self.KERNEL_SIZE),
-            nn.BatchNorm3d(num_channels),
-            nn.ReLU(),
-            nn.Conv3d(num_channels, num_channels, self.KERNEL_SIZE),
+            ResidualBlock(num_channels, num_channels),
+            ResidualBlock(num_channels, num_channels),
+            nn.Conv3d(num_channels, num_channels, 3),
             nn.BatchNorm3d(num_channels),
             nn.ReLU(),
         )
-        # NOTE: this matches the above sequential conv's hyperparameters
+        # NOTE: confirm this matches, as otherwise the fully-connected layers'
+        # input shape would not be correct
         assert game.getBoardSize() == EMBEDDING_SHAPE[1:]
-        conv_out_shape = conv_conversion(
-            conv_conversion(EMBEDDING_SHAPE, self.KERNEL_SIZE),
-            self.KERNEL_SIZE,
+        self._fc_layers_in_shape = num_channels * math.prod(
+            conv_conversion(EMBEDDING_SHAPE, 3)
         )
-        self._fc_layers_shape = num_channels * math.prod(conv_out_shape)
         self.fc_layers = nn.Sequential(
-            nn.Linear(self._fc_layers_shape, 1024),
-            nn.BatchNorm1d(1024),
-            nn.Dropout(dropout_p),
-            nn.Linear(1024, 512),
-            nn.BatchNorm1d(512),
-            nn.Dropout(dropout_p),
+            nn.Flatten(),
+            nn.Linear(self._fc_layers_in_shape, game.getActionSize()),
+            nn.BatchNorm1d(game.getActionSize()),
+            nn.Dropout(dropout_p),  # Apply before ReLU, for computational efficiency
+            nn.ReLU(),
         )
-        # NOTE: leave as raw scores to directly use nn.functional.cross_entropy
-        self.policy_head = nn.Linear(512, game.getActionSize())
-        self.value_head = nn.Sequential(nn.Linear(512, 1), nn.Tanh())
+        # NOTE: leave pi as raw scores (don't apply Softmax) to directly use
+        # nn.functional.cross_entropy
+        self.policy_head = nn.Linear(game.getActionSize(), game.getActionSize())
+        self.value_head = nn.Sequential(
+            nn.Linear(game.getActionSize(), 128),
+            nn.BatchNorm1d(128),
+            nn.Dropout(dropout_p),  # Apply before ReLU, for computational efficiency
+            nn.ReLU(),
+            nn.Linear(128, 1),
+            nn.Tanh(),
+        )
 
-    def forward(self, board: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    @classmethod
+    def embed(cls, *boards: Board) -> torch.Tensor:
+        """Embed the input boards into a Tensor for the forward pass."""
+        # FloatTensor is needed for gradient computations
+        return torch.FloatTensor(embed(*boards))
+
+    def forward(self, boards: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Run a forward pass on embedded board batch, getting policy scores and value.
 
         Args:
-            board: Embedded canonical board batch of shape (B, D, X, Y).
+            boards: Embedded canonical board batch of shape (B, D, X, Y).
 
         Returns:
             Tuple of policy scores of shape (B, |A|), value in [-1, 1] of shape (B, 1).
         """
-        s = board.unsqueeze(1)  # B, 1, D, X, Y
+        s = boards.unsqueeze(1)  # B, 1, D, X, Y
         s = self.conv_layers(s)  # B, C, D - 2 * 2, X - 2 * 2, Y - 2 * 2
-        s = s.reshape(-1, self._fc_layers_shape)  # B, C * (D - 4) * (X - 4) * (Y - 4)
-        s = self.fc_layers(s)  # B, 512
+        s = self.fc_layers(s)  # B, |A|
         return self.policy_head(s), self.value_head(s)  # (B, |A|), (B, 1)
 
 
@@ -146,8 +169,7 @@ class NNetWrapper(NeuralNet):
         true_vs: Sequence[float],
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Calculate pi, V, and total loss given example data."""
-        # FloatTensor is needed for gradient
-        pred_pis, pred_vs = self.nnet(torch.FloatTensor(embed(*boards)))
+        pred_pis, pred_vs = self.nnet(self.nnet.embed(*boards))
         loss_pi = nn.functional.cross_entropy(
             input=pred_pis, target=torch.FloatTensor(true_pis)
         )
@@ -205,14 +227,10 @@ class NNetWrapper(NeuralNet):
                 *list(zip(*examples[(num_batches - 1) * batch_size :]))
             )
             writer.add_scalars(
-                "loss",
-                {
-                    "train_pi": train_losses_pi.avg,
-                    "train_V": train_losses_v.avg,
-                    "val_pi": loss_pi,
-                    "val_V": loss_v,
-                },
-                epoch,
+                "loss/pi", {"train": train_losses_pi.avg, "val": loss_pi}, epoch
+            )
+            writer.add_scalars(
+                "loss/V", {"train": train_losses_v.avg, "val": loss_v}, epoch
             )
 
     def predict(self, board: Board) -> tuple[Policy, float]:
@@ -227,8 +245,7 @@ class NNetWrapper(NeuralNet):
         """
         self.nnet.eval()
         with torch.no_grad():
-            # FloatTensor is needed for gradient
-            pi, v = self.nnet(torch.FloatTensor(embed(board)))
+            pi, v = self.nnet(self.nnet.embed(board))
         # NOTE: [0] is to unbatch
         return nn.functional.softmax(pi, dim=1)[0].numpy(), float(v[0])
 

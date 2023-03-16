@@ -7,12 +7,13 @@ import chess
 import chess.engine
 import numpy as np
 from azg.MCTS import MCTS
-from azg.utils import dotdict
 
 from azg_chess.game import WHITE_PLAYER, Board, action_to_move, move_to_action
 from azg_chess.nn import NNetWrapper
 
 if TYPE_CHECKING:
+    from azg.utils import dotdict
+
     from azg_chess.game import ActionIndex, ChessGame, PlayerID
 
 
@@ -140,6 +141,7 @@ class AlphaZeroChessPlayer(ChessPlayer):
     ):
         super().__init__(player_id)
         self._nnet = NNetWrapper(game, **nnet_wrapper_kwargs)
+        self._nnet.nnet.eval()  # Place into eval mode
         if parameters_path is not None:
             self._nnet.load_checkpoint(*parameters_path)
         self._mcts = MCTS(game, self._nnet, mcts_args)
