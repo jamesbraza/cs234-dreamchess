@@ -1,3 +1,0 @@
-chess
-flask
-pyttsx3
