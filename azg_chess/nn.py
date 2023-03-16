@@ -70,7 +70,7 @@ def conv_conversion(
 class ResidualBlock(nn.Module):
     """Basic residual block based on two Conv3d with BatchNorms."""
 
-    def __init__(self, in_channels: int = 256, out_channels: int = 256, **conv_kwargs):
+    def __init__(self, in_channels: int, out_channels: int, **conv_kwargs):
         super().__init__()
         conv_kwargs = {"kernel_size": 3, "padding": 1} | conv_kwargs
         self.non_residual = nn.Sequential(
