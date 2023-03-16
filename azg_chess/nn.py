@@ -34,17 +34,17 @@ def embed(*boards: Board) -> npt.NDArray[int]:
         boards: Variable amount of Boards to embed.
 
     Returns:
-        Embedded representation of the board of shape (B, 8, 8, 6), where B is
+        Embedded representation of the board of shape (B, 6, 8, 8), where B is
             the batch size (number passed in), white is 1, black is -1, no
             piece is 0, and players are pawn (0), knight (1), bishop (2),
             rook (3), queen (4), and king (5).
     """
-    embedding = np.zeros((len(boards), *EMBEDDING_SHAPE), dtype=int)
+    batch_embedding = np.zeros((len(boards), *EMBEDDING_SHAPE), dtype=int)
     for i, board in enumerate(boards):
         for sq, pc in board.piece_map().items():
             bxyz = i, pc.piece_type - 1, chess.square_rank(sq), chess.square_file(sq)
-            embedding[bxyz] = 1 if pc.color else -1
-    return embedding
+            batch_embedding[bxyz] = 1 if pc.color else -1
+    return batch_embedding
 
 
 def conv_conversion(
