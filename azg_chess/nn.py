@@ -182,7 +182,7 @@ class NNetWrapper(NeuralNet):
     def train(  # pylint: disable=too-many-locals
         self,
         examples: Sequence[tuple[Board, Policy, float]],
-        epochs: int = 10,
+        epochs: int = 20,
         batch_size: int = 64,
         l2_coefficient: float = 1e-4,
     ) -> None:
