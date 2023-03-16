@@ -196,9 +196,20 @@ class CoachArgs(MCTSArgs):
 
 
 class TestNNet:
-    @pytest.mark.parametrize("coach_args", [CoachArgs()])
-    def test_coach(self, chess_game: ChessGame, coach_args: CoachArgs) -> None:
-        coach = Coach(chess_game, NNetWrapper(chess_game), coach_args)
+    @pytest.mark.parametrize(
+        ("coach_args", "parameters_path"),
+        [(CoachArgs(), ("checkpoints", "temp.pth.tar"))],
+    )
+    def test_coach(
+        self,
+        chess_game: ChessGame,
+        coach_args: CoachArgs,
+        parameters_path: tuple[str, str] | None,
+    ) -> None:
+        nnet_wrapper = NNetWrapper(chess_game)
+        if parameters_path is not None:
+            nnet_wrapper.load_checkpoint(*parameters_path)
+        coach = Coach(chess_game, nnet_wrapper, coach_args)
         coach.learn()
 
     def test_full_game(self, chess_game: ChessGame, mcts_args: MCTSArgs) -> None:
@@ -218,6 +229,7 @@ class TestNNet:
         stockfish_player: StockfishChessPlayer,
         n_games: int = 10,
         verbose: bool = False,
+        include_ties: bool = False,
     ) -> float:
         assert unknown_player.id * -1 == stockfish_player.id
 
@@ -227,8 +239,12 @@ class TestNNet:
             game=chess_game,
             display=partial(chess_game.display, verbosity=2),
         )
-        n_p1_wins, n_p2_wins, _ = arena.playGames(n_games, verbose)
-        return n_p1_wins / (n_p1_wins + n_p2_wins)
+        n_p1_wins, n_p2_wins, n_ties = arena.playGames(n_games, verbose)
+        if include_ties:
+            n_total = n_p1_wins + n_p2_wins + n_ties
+        else:
+            n_total = n_p1_wins + n_p2_wins
+        return n_p1_wins / n_total
 
     @staticmethod
     def play_game_update_elo(
