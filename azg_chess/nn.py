@@ -227,14 +227,10 @@ class NNetWrapper(NeuralNet):
                 *list(zip(*examples[(num_batches - 1) * batch_size :]))
             )
             writer.add_scalars(
-                "loss",
-                {
-                    "train_pi": train_losses_pi.avg,
-                    "train_V": train_losses_v.avg,
-                    "val_pi": loss_pi,
-                    "val_V": loss_v,
-                },
-                epoch,
+                "loss/pi", {"train": train_losses_pi.avg, "val": loss_pi}, epoch
+            )
+            writer.add_scalars(
+                "loss/V", {"train": train_losses_v.avg, "val": loss_v}, epoch
             )
 
     def predict(self, board: Board) -> tuple[Policy, float]:
