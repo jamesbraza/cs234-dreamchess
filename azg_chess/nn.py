@@ -68,7 +68,7 @@ def conv_conversion(
 
 
 class ResidualBlock(nn.Module):
-    """Basic residual block based on two Conv3d with BatchNorms."""
+    """Basic residual block based on two Conv3d with BatchNorm3ds."""
 
     def __init__(self, in_channels: int, out_channels: int, **conv_kwargs):
         super().__init__()
