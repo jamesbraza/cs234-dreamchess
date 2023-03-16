@@ -110,26 +110,27 @@ class NNet(nn.Module):
         )
         # NOTE: this matches the above sequential conv's hyperparameters
         assert game.getBoardSize() == EMBEDDING_SHAPE[1:]
-        self._fc_layers_shape = num_channels * math.prod(
+        self._fc_layers_in_shape = num_channels * math.prod(
             conv_conversion(EMBEDDING_SHAPE, 3)
         )
         self.fc_layers = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(self._fc_layers_shape, 1024),
-            nn.BatchNorm1d(1024),
-            nn.Dropout(dropout_p),
-            nn.Linear(1024, 512),
-            nn.BatchNorm1d(512),
-            nn.Dropout(dropout_p),
-        )
-        # NOTE: leave pi as raw scores to directly use nn.functional.cross_entropy
-        self.policy_head = nn.Sequential(
-            nn.Linear(512, 512),
-            nn.BatchNorm1d(512),
+            nn.Linear(self._fc_layers_in_shape, game.getActionSize()),
+            nn.BatchNorm1d(game.getActionSize()),
+            nn.Dropout(dropout_p),  # Apply before ReLU, for computational efficiency
             nn.ReLU(),
-            nn.Linear(512, game.getActionSize()),
         )
-        self.value_head = nn.Sequential(nn.Linear(512, 1), nn.Tanh())
+        # NOTE: leave pi as raw scores (don't apply Softmax) to directly use
+        # nn.functional.cross_entropy
+        self.policy_head = nn.Linear(game.getActionSize(), game.getActionSize())
+        self.value_head = nn.Sequential(
+            nn.Linear(game.getActionSize(), 128),
+            nn.BatchNorm1d(128),
+            nn.Dropout(dropout_p),  # Apply before ReLU, for computational efficiency
+            nn.ReLU(),
+            nn.Linear(128, 1),
+            nn.Tanh(),
+        )
 
     def forward(self, board: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """
@@ -143,7 +144,7 @@ class NNet(nn.Module):
         """
         s = board.unsqueeze(1)  # B, 1, D, X, Y
         s = self.conv_layers(s)  # B, C, D - 2 * 2, X - 2 * 2, Y - 2 * 2
-        s = self.fc_layers(s)  # B, 512
+        s = self.fc_layers(s)  # B, |A|
         return self.policy_head(s), self.value_head(s)  # (B, |A|), (B, 1)
 
 
