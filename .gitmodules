@@ -1,3 +1,6 @@
 [submodule "azg"]
 	path = azg
 	url = https://github.com/suragnair/alpha-zero-general
+[submodule "geochri"]
+	path = geochri
+	url = https://github.com/lasha81/AlphaZero_Chess.git

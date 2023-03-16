@@ -5,7 +5,9 @@ from typing import TYPE_CHECKING, NamedTuple, Protocol, TypeVar
 
 import chess
 import chess.engine
+import geochri.src as geochri
 import numpy as np
+import torch
 from azg.MCTS import MCTS
 
 from azg_chess.game import WHITE_PLAYER, Board, action_to_move, move_to_action
@@ -151,3 +153,57 @@ class AlphaZeroChessPlayer(ChessPlayer):
 
     def __call__(self, board: Board) -> ActionIndex:
         return np.argmax(self._mcts.getActionProb(board, temp=0))
+
+
+class GeochriPlayer(ChessPlayer):
+    """
+    Player whose decisions are made by the NN from the [Geochri repository][1].
+
+    [1]: https://github.com/geochri/AlphaZero_Chess
+    """
+
+    def __init__(
+        self,
+        player_id: PlayerID = WHITE_PLAYER,
+        parameters_file: str | None = None,
+        mcts_steps_per_move: int = 250,
+    ):
+        super().__init__(player_id)
+        self.mcts_steps_per_move = mcts_steps_per_move
+
+        self._net = geochri.alpha_net.ChessNet()
+        if torch.cuda.is_available():
+            self._net.cuda()
+        self._net.share_memory()
+        self._net.eval()
+        if parameters_file is not None:
+            checkpoint = torch.load(
+                parameters_file,
+                map_location=None if torch.cuda.is_available() else torch.device("cpu"),
+            )
+            self._net.load_state_dict(checkpoint["state_dict"])
+
+    def choose_move(self, board: Board) -> chess.Move:
+        geochri_board = geochri.chess_utils.load_chessboard_to_Geochri(board)
+
+        best_move, _ = geochri.MCTS_chess.UCT_search(
+            geochri_board, num_reads=self.mcts_steps_per_move, net=self._net
+        )
+        i_pos, f_pos, prom = geochri.encoder_decoder.decode_action(
+            geochri_board, encoded=best_move
+        )
+
+        if prom in chess.PIECE_SYMBOLS:
+            index = chess.PIECE_SYMBOLS.index(prom)
+            promotion_piece = chess.Piece(chess.PIECE_TYPES[index], chess.BLACK)
+        elif prom.lower() in chess.PIECE_SYMBOLS:
+            index = chess.PIECE_SYMBOLS.index(prom.lower())
+            promotion_piece = chess.Piece(chess.PIECE_TYPES[index], chess.WHITE)
+        else:
+            promotion_piece = None
+
+        from_square, to_square = (
+            chess.parse_square(chr(pos[0][1] + ord("a")) + str(8 - pos[0][0]))
+            for pos in (i_pos, f_pos)
+        )
+        return chess.Move(from_square, to_square, promotion_piece)
