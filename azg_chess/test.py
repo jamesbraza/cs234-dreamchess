@@ -28,6 +28,7 @@ from azg_chess.players import (
     AlphaZeroChessPlayer,
     ChessPlayer,
     MCTSArgs,
+    RandomChessPlayer,
     StockfishChessPlayer,
 )
 
@@ -170,6 +171,17 @@ class TestGame:
         assert comparison(n_p1_wins, n_p2_wins)
 
 
+def outcomes_to_win_percentage(
+    n_wins: int, n_losses: int, n_ties: int, include_ties: bool = False
+) -> float:
+    """Convert wins, losses, ties to a win percentage."""
+    if include_ties:
+        n_total = n_wins + n_losses + n_ties
+    else:
+        n_total = n_wins + n_losses
+    return n_wins / n_total
+
+
 class CoachArgs(MCTSArgs):
     """Data structure to configure the Coach class."""
 
@@ -200,7 +212,11 @@ class CoachArgs(MCTSArgs):
 class TestNNet:
     @pytest.mark.parametrize(
         ("coach_args", "parameters_path"),
-        [(CoachArgs(), ("checkpoints", "temp.pth.tar"))],
+        [
+            pytest.param(CoachArgs(), None, id="from_scratch"),
+            pytest.param(CoachArgs(), ("checkpoints", "temp.pth.tar"), id="resume"),
+            pytest.param(CoachArgs(), ("checkpoints", "best.pth.tar"), id="iterate"),
+        ],
     )
     def test_coach(
         self,
@@ -214,40 +230,53 @@ class TestNNet:
         coach = Coach(chess_game, nnet_wrapper, coach_args)
         coach.learn()
 
-    @pytest.mark.parametrize("mcts_args", [MCTSArgs()])
-    def test_full_game(self, chess_game: ChessGame, mcts_args: MCTSArgs) -> None:
+    @pytest.mark.parametrize(
+        ("mcts_args", "parameters_path"),
+        [
+            pytest.param(MCTSArgs(), None, id="no_training_model"),
+            pytest.param(
+                MCTSArgs(), ("checkpoints", "temp.pth.tar"), id="model_in_training"
+            ),
+            pytest.param(
+                MCTSArgs(), ("checkpoints", "best.pth.tar"), id="trained_model"
+            ),
+        ],
+    )
+    def test_full_game(
+        self,
+        chess_game: ChessGame,
+        mcts_args: MCTSArgs,
+        parameters_path: tuple[str, str] | None,
+    ) -> None:
         az_player = AlphaZeroChessPlayer(
-            chess_game, player_id=WHITE_PLAYER, mcts_args=mcts_args
+            chess_game, WHITE_PLAYER, mcts_args, parameters_path
         )
 
-        win_percentage = self.play_against_stockfish(
-            chess_game, az_player, StockfishChessPlayer(BLACK_PLAYER, engine_elo=1400)
+        outcomes_1350_elo = self.play_many_games(
+            chess_game, az_player, StockfishChessPlayer(BLACK_PLAYER, engine_elo=1350)
         )
-        assert 0.0 <= win_percentage <= 1.0
+        outcomes_random = self.play_many_games(
+            chess_game, az_player, RandomChessPlayer(BLACK_PLAYER)
+        )
+        _ = outcomes_1350_elo, outcomes_random
 
     @staticmethod
-    def play_against_stockfish(
+    def play_many_games(
         chess_game: ChessGame,
-        unknown_player: ChessPlayer,
-        stockfish_player: StockfishChessPlayer,
+        subject_player: ChessPlayer,
+        opposing_player: ChessPlayer,
         n_games: int = 10,
         verbose: bool = False,
-        include_ties: bool = False,
-    ) -> float:
-        assert unknown_player.id * -1 == stockfish_player.id
+    ) -> tuple[int, int, int]:
+        assert subject_player.id * -1 == opposing_player.id
 
         arena = Arena(
-            unknown_player,
-            player2=stockfish_player,
+            player1=subject_player,
+            player2=opposing_player,
             game=chess_game,
             display=partial(chess_game.display, verbosity=2),
         )
-        n_p1_wins, n_p2_wins, n_ties = arena.playGames(n_games, verbose)
-        if include_ties:
-            n_total = n_p1_wins + n_p2_wins + n_ties
-        else:
-            n_total = n_p1_wins + n_p2_wins
-        return n_p1_wins / n_total
+        return arena.playGames(n_games, verbose)
 
     @staticmethod
     def play_game_update_elo(
