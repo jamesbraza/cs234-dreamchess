@@ -5,11 +5,11 @@ from typing import TYPE_CHECKING, NamedTuple, Protocol, TypeVar
 
 import chess
 import chess.engine
-import geochri.src as geochri
 import numpy as np
 import torch
 from azg.MCTS import MCTS
 
+import geochri.src as geochri
 from azg_chess.game import WHITE_PLAYER, Board, action_to_move, move_to_action
 from azg_chess.nn import NNetWrapper
 
@@ -105,6 +105,12 @@ class StockfishChessPlayer(ChessPlayer):
         # NOTE: requires Stockfish 11 per here:
         # https://github.com/official-stockfish/Stockfish/issues/3358
         self._engine.configure({"UCI_LimitStrength": True, "UCI_Elo": engine_elo})
+
+    @property
+    def elo_range(self) -> tuple[int, int]:
+        """Get the range of Elo supported by Stockfish."""
+        option = self._engine.options["UCI_Elo"]
+        return option.min, option.max
 
     def choose_move(self, board: Board) -> chess.Move:
         # SEE: https://python-chess.readthedocs.io/en/latest/engine.html#playing
