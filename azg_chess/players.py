@@ -82,8 +82,7 @@ class HumanChessPlayer(ChessPlayer):
                 print(f"Invalid UCI {uci_input}.")
 
 
-# NOTE: 0 is below the lowest possible Elo of 100
-NULL_ELO: Elo = 0
+NULL_ELO: Elo = 0  # NOTE: 0 is below the lowest possible Elo of 100
 
 
 class StockfishChessPlayer(ChessPlayer):
