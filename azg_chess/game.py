@@ -203,10 +203,10 @@ class ChessGame(Game):
             pi = np.array(pi, dtype=float)
         action_size = self.getActionSize()
         assert pi.shape == (action_size,)
-        # 1. No flip
+        # 1. No flip (and no copy)
         symmetries = [(board, pi)]
         pi = pi.reshape(NUM_SQUARES, NUM_SQUARES)
-        # 2. Horizontal flip
+        # 2. Horizontal flip (and make a copy)
         symmetries.append(
             (board.transform(chess.flip_horizontal), np.flip(pi, axis=1).flatten())
         )
