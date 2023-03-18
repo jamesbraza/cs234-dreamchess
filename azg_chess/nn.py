@@ -16,22 +16,25 @@ from tqdm import tqdm
 from azg_chess.game import BOARD_DIMENSIONS, NUM_PIECES
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
     import numpy.typing as npt
 
     from azg_chess.game import Board, ChessGame, Policy
 
 # Match nn.Conv3d shape of D, X, Y
-EMBEDDING_SHAPE: tuple[int, int, int] = NUM_PIECES, *BOARD_DIMENSIONS
+SIGNED_EMBEDDING_SHAPE: tuple[int, int, int] = NUM_PIECES, *BOARD_DIMENSIONS
+UNSIGNED_EMBEDDING_SHAPE: tuple[int, int, int] = 2 * NUM_PIECES, *BOARD_DIMENSIONS
 
 
-def embed(*boards: Board) -> npt.NDArray[int]:
+def embed(*boards: Board, signed: bool = True) -> npt.NDArray[int]:
     """
     Embed the input boards into a numpy array.
 
     Args:
         boards: Variable amount of Boards to embed.
+        signed: Set True to embed white as 1 and black as -1 on one board.
+            Set False to embed both as 1 on separate boards.
 
     Returns:
         Embedded representation of the board of shape (B, 6, 8, 8), where B is
@@ -39,11 +42,15 @@ def embed(*boards: Board) -> npt.NDArray[int]:
             piece is 0, and players are pawn (0), knight (1), bishop (2),
             rook (3), queen (4), and king (5).
     """
-    batch_embedding = np.zeros((len(boards), *EMBEDDING_SHAPE), dtype=int)
+    shape = SIGNED_EMBEDDING_SHAPE if signed else UNSIGNED_EMBEDDING_SHAPE
+    batch_embedding = np.zeros((len(boards), *shape), dtype=int)
     for i, board in enumerate(boards):
         for sq, pc in board.piece_map().items():
-            bxyz = i, pc.piece_type - 1, chess.square_rank(sq), chess.square_file(sq)
-            batch_embedding[bxyz] = 1 if pc.color else -1
+            slice_index = pc.piece_type - 1
+            if not signed and pc.color == chess.BLACK:
+                slice_index += NUM_PIECES
+            bxyz = i, slice_index, chess.square_rank(sq), chess.square_file(sq)
+            batch_embedding[bxyz] = -1 if signed and pc.color == chess.BLACK else 1
     return batch_embedding
 
 
@@ -88,7 +95,15 @@ class ResidualBlock(nn.Module):
 class NNet(nn.Module):
     """Neural network takes in a board embedding to predict policy logits and value."""
 
-    def __init__(self, game: ChessGame, num_channels: int = 64, dropout_p: float = 0.8):
+    def __init__(
+        self,
+        game: ChessGame,
+        num_channels: int = 64,
+        dropout_p: float = 0.8,
+        embed_func_shape: tuple[
+            Callable[[Board, ...], npt.NDArray[int]], tuple[int, int, int]
+        ] = (embed, SIGNED_EMBEDDING_SHAPE),
+    ):
         """
         Initialize.
 
@@ -96,6 +111,8 @@ class NNet(nn.Module):
             game: Game, to extract action sizes and confirm board size.
             num_channels: Number of channels for beginning Conv3d's.
             dropout_p: Dropout percentage.
+            embed_func_shape: Two tuple of embedding function and its per-board
+                output shape.
         """
         super().__init__()
         self.conv_layers = nn.Sequential(
@@ -108,12 +125,11 @@ class NNet(nn.Module):
             nn.BatchNorm3d(num_channels),
             nn.ReLU(),
         )
+        self._embed_func, shape = embed_func_shape
         # NOTE: confirm this matches, as otherwise the fully-connected layers'
         # input shape would not be correct
-        assert game.getBoardSize() == EMBEDDING_SHAPE[1:]
-        self._fc_layers_in_shape = num_channels * math.prod(
-            conv_conversion(EMBEDDING_SHAPE, 3)
-        )
+        assert game.getBoardSize() == shape[1:]
+        self._fc_layers_in_shape = num_channels * math.prod(conv_conversion(shape, 3))
         self.fc_layers = nn.Sequential(
             nn.Flatten(),
             nn.Linear(self._fc_layers_in_shape, game.getActionSize()),
@@ -133,11 +149,10 @@ class NNet(nn.Module):
             nn.Tanh(),
         )
 
-    @classmethod
-    def embed(cls, *boards: Board) -> torch.Tensor:
+    def embed(self, *boards: Board) -> torch.Tensor:
         """Embed the input boards into a Tensor for the forward pass."""
         # FloatTensor is needed for gradient computations
-        return torch.FloatTensor(embed(*boards))
+        return torch.FloatTensor(self._embed_func(*boards))
 
     def forward(self, boards: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """
