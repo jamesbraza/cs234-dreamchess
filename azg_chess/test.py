@@ -278,7 +278,7 @@ class TestNNet:
         desired_stability: Elo = 100,
         n_exit: int = 10,
         verbose: bool = False,
-    ) -> Elo:
+    ) -> tuple[Elo, bool]:
         """
         Discern the Elo of an unknown player.
 
@@ -295,7 +295,7 @@ class TestNNet:
             verbose: Set True to print out game updates.
 
         Returns:
-            Stabilized or last seen Elo of the known player.
+            Two tuple of discerned Elo, and if the Elo was stable.
         """
         assert unknown_elo_player.id == WHITE_PLAYER
         make_stockfish = partial(StockfishChessPlayer, player_id=BLACK_PLAYER)
@@ -315,14 +315,9 @@ class TestNNet:
             maxlen=window_width,
         )
         for _ in range(n_exit):
-            if (
-                max(unknown_elos_window) - min(unknown_elos_window) <= desired_stability
-                or all(
-                    NULL_ELO < elo < known[0].elo_range[0]
-                    for elo in unknown_elos_window
-                )
-                or all(elo > known[0].elo_range[1] for elo in unknown_elos_window)
-            ):
+            if all(
+                NULL_ELO < elo < known[0].elo_range[0] for elo in unknown_elos_window
+            ) or all(elo > known[0].elo_range[1] for elo in unknown_elos_window):
                 break
             updated_unknown_elo, _ = cls.play_game_update_elo(
                 chess_game,
@@ -330,10 +325,13 @@ class TestNNet:
                 p2_p2elo=known,
                 verbose=verbose,
             )
+            if max(unknown_elos_window) - min(unknown_elos_window) <= desired_stability:
+                return updated_unknown_elo, True  # Reached stability
+            # Didn't reach stability yet, go for another iteration
             unknown_elos_window.append(updated_unknown_elo)
             # Match Stockfish to the Elo of the unknown player each game
             update_known(elo=updated_unknown_elo)
-        return unknown_elos_window[-1]
+        return unknown_elos_window[-1], False
 
 
 class TestChessUtils:
