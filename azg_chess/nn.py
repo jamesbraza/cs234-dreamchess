@@ -281,3 +281,15 @@ class NNetWrapper(NeuralNet):
         """Load in NN's parameters from the folder/filename."""
         checkpoint = torch.load(f=os.path.join(folder, filename))
         self.nnet.load_state_dict(checkpoint["model_state_dict"])
+
+
+class UnsignedNNetWrapper(NNetWrapper):
+    """Wrapper that specifies the unsigned embedding function by default."""
+
+    def __init__(self, game: ChessGame, **nnet_kwargs):
+        super().__init__(game)
+        # Since Coach.py instantiates pnet based on class alone (and not args),
+        # this subclass needs to exist to specify the unsigned embedding
+        self.nnet = NNet(
+            game, **({"embed_func_shape": unsigned_embed_pair} | nnet_kwargs)
+        )
