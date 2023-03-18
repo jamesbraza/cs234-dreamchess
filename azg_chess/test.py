@@ -1,3 +1,4 @@
+import collections
 import math
 from functools import partial
 from operator import gt, lt
@@ -23,6 +24,7 @@ from azg_chess.game import (
 )
 from azg_chess.nn import NNetWrapper
 from azg_chess.players import (
+    NULL_ELO,
     AlphaZeroChessPlayer,
     ChessPlayer,
     MCTSArgs,
@@ -30,7 +32,7 @@ from azg_chess.players import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
 
 
 @pytest.fixture(name="chess_game")
@@ -196,11 +198,23 @@ class CoachArgs(MCTSArgs):
 
 
 class TestNNet:
-    @pytest.mark.parametrize("coach_args", [CoachArgs()])
-    def test_coach(self, chess_game: ChessGame, coach_args: CoachArgs) -> None:
-        coach = Coach(chess_game, NNetWrapper(chess_game), coach_args)
+    @pytest.mark.parametrize(
+        ("coach_args", "parameters_path"),
+        [(CoachArgs(), ("checkpoints", "temp.pth.tar"))],
+    )
+    def test_coach(
+        self,
+        chess_game: ChessGame,
+        coach_args: CoachArgs,
+        parameters_path: tuple[str, str] | None,
+    ) -> None:
+        nnet_wrapper = NNetWrapper(chess_game)
+        if parameters_path is not None:
+            nnet_wrapper.load_checkpoint(*parameters_path)
+        coach = Coach(chess_game, nnet_wrapper, coach_args)
         coach.learn()
 
+    @pytest.mark.parametrize("mcts_args", [MCTSArgs()])
     def test_full_game(self, chess_game: ChessGame, mcts_args: MCTSArgs) -> None:
         az_player = AlphaZeroChessPlayer(
             chess_game, player_id=WHITE_PLAYER, mcts_args=mcts_args
@@ -218,6 +232,7 @@ class TestNNet:
         stockfish_player: StockfishChessPlayer,
         n_games: int = 10,
         verbose: bool = False,
+        include_ties: bool = False,
     ) -> float:
         assert unknown_player.id * -1 == stockfish_player.id
 
@@ -227,14 +242,18 @@ class TestNNet:
             game=chess_game,
             display=partial(chess_game.display, verbosity=2),
         )
-        n_p1_wins, n_p2_wins, _ = arena.playGames(n_games, verbose)
-        return n_p1_wins / (n_p1_wins + n_p2_wins)
+        n_p1_wins, n_p2_wins, n_ties = arena.playGames(n_games, verbose)
+        if include_ties:
+            n_total = n_p1_wins + n_p2_wins + n_ties
+        else:
+            n_total = n_p1_wins + n_p2_wins
+        return n_p1_wins / n_total
 
     @staticmethod
     def play_game_update_elo(
         chess_game: ChessGame,
-        p1_p1elo: tuple[ChessPlayer, Elo],
-        p2_p2elo: tuple[ChessPlayer, Elo],
+        p1_p1elo: "Sequence[ChessPlayer, Elo]",
+        p2_p2elo: "Sequence[ChessPlayer, Elo]",
         k_factor: int = ICC_K_FACTOR,
         verbose: bool = False,
     ) -> tuple[Elo, Elo]:
@@ -247,6 +266,72 @@ class TestNNet:
         )
         winner_id: Literal[-1, 0, 1] = arena.playGame(verbose)
         return update_elo(p1_elo, p2_elo, winner_id, k_factor)
+
+    @classmethod
+    def discern_elo(
+        cls,
+        chess_game: ChessGame,
+        unknown_elo_player: ChessPlayer,
+        unknown_elo_assumption: Elo = 1350,
+        stockfish_initial_elo: Elo = 1350,
+        window_width: int = 10,
+        desired_stability: Elo = 100,
+        n_exit: int = 10,
+        verbose: bool = False,
+    ) -> tuple[Elo, bool]:
+        """
+        Discern the Elo of an unknown player.
+
+        Args:
+            chess_game: Chess game to use in the arena.
+            unknown_elo_player: Player of unknown Elo.
+            unknown_elo_assumption: Assumption of unknown player's Elo.
+            stockfish_initial_elo: Initial Elo assumption for Stockfish player.
+            window_width: Number of games in the stability sliding window.
+            desired_stability: Range of values in the sliding window to
+                consider Elo as having stabilized.
+            n_exit: Failover max number of games if Elo doesn't stabilize.  If
+                the failover threshold is hit, use the last updated Elo.
+            verbose: Set True to print out game updates.
+
+        Returns:
+            Two tuple of discerned Elo, and if the Elo was stable.
+        """
+        assert unknown_elo_player.id == WHITE_PLAYER
+        make_stockfish = partial(StockfishChessPlayer, player_id=BLACK_PLAYER)
+        known = [
+            make_stockfish(engine_elo=stockfish_initial_elo),
+            stockfish_initial_elo,
+        ]
+
+        def update_known(elo: Elo) -> None:
+            elo = known[0].clip_elo(elo)
+            if known[1] != elo:
+                known[0] = make_stockfish(engine_elo=elo)
+                known[1] = elo
+
+        unknown_elos_window = collections.deque(
+            [NULL_ELO] * (window_width - 1) + [unknown_elo_assumption],
+            maxlen=window_width,
+        )
+        for _ in range(n_exit):
+            if all(
+                NULL_ELO < elo < known[0].elo_range[0] for elo in unknown_elos_window
+            ) or all(elo > known[0].elo_range[1] for elo in unknown_elos_window):
+                break
+            updated_unknown_elo, _ = cls.play_game_update_elo(
+                chess_game,
+                p1_p1elo=(unknown_elo_player, unknown_elos_window[-1]),
+                p2_p2elo=known,
+                verbose=verbose,
+            )
+            if max(unknown_elos_window) - min(unknown_elos_window) <= desired_stability:
+                return updated_unknown_elo, True  # Reached stability
+            # Didn't reach stability yet, go for another iteration
+            unknown_elos_window.append(updated_unknown_elo)
+            # Match Stockfish to the Elo of the unknown player each game
+            update_known(elo=updated_unknown_elo)
+        return unknown_elos_window[-1], False
 
 
 class TestChessUtils:

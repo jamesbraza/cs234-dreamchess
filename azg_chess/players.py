@@ -5,17 +5,18 @@ from typing import TYPE_CHECKING, NamedTuple, Protocol, TypeVar
 
 import chess
 import chess.engine
-import geochri.src as geochri
 import numpy as np
 import torch
 from azg.MCTS import MCTS
 
+import geochri.src as geochri
 from azg_chess.game import WHITE_PLAYER, Board, action_to_move, move_to_action
 from azg_chess.nn import NNetWrapper
 
 if TYPE_CHECKING:
     from azg.utils import dotdict
 
+    from azg_chess.chess_utils import Elo
     from azg_chess.game import ActionIndex, ChessGame, PlayerID
 
 
@@ -81,6 +82,9 @@ class HumanChessPlayer(ChessPlayer):
                 print(f"Invalid UCI {uci_input}.")
 
 
+NULL_ELO: Elo = 0  # NOTE: 0 is below the lowest possible Elo of 100
+
+
 class StockfishChessPlayer(ChessPlayer):
     """
     Player whose decisions are made by the Stockfish chess engine.
@@ -98,13 +102,24 @@ class StockfishChessPlayer(ChessPlayer):
         self,
         player_id: PlayerID = WHITE_PLAYER,
         engine_path: str = DEFAULT_ENGINE_PATH,
-        engine_elo: int = DEFAULT_ELO,
+        engine_elo: Elo = DEFAULT_ELO,
     ):
         super().__init__(player_id)
         self._engine = chess.engine.SimpleEngine.popen_uci(engine_path)
         # NOTE: requires Stockfish 11 per here:
         # https://github.com/official-stockfish/Stockfish/issues/3358
         self._engine.configure({"UCI_LimitStrength": True, "UCI_Elo": engine_elo})
+
+    @property
+    def elo_range(self) -> tuple[Elo, Elo]:
+        """Get the range of Elo supported by Stockfish."""
+        option = self._engine.options["UCI_Elo"]
+        return option.min, option.max
+
+    def clip_elo(self, elo: Elo) -> Elo:
+        """Clip an Elo to be in the range supported by Stockfish."""
+        min_elo, max_elo = self.elo_range
+        return min(max(elo, min_elo), max_elo)
 
     def choose_move(self, board: Board) -> chess.Move:
         # SEE: https://python-chess.readthedocs.io/en/latest/engine.html#playing

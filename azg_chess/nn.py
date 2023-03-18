@@ -68,7 +68,7 @@ def conv_conversion(
 
 
 class ResidualBlock(nn.Module):
-    """Basic residual block based on two Conv3d with BatchNorms."""
+    """Basic residual block based on two Conv3d with BatchNorm3ds."""
 
     def __init__(self, in_channels: int, out_channels: int, **conv_kwargs):
         super().__init__()
@@ -182,7 +182,7 @@ class NNetWrapper(NeuralNet):
     def train(  # pylint: disable=too-many-locals
         self,
         examples: Sequence[tuple[Board, Policy, float]],
-        epochs: int = 10,
+        epochs: int = 20,
         batch_size: int = 64,
         l2_coefficient: float = 1e-4,
     ) -> None:
