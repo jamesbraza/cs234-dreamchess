@@ -220,25 +220,25 @@ class TestNNet:
             chess_game, player_id=WHITE_PLAYER, mcts_args=mcts_args
         )
 
-        win_percentage = self.play_against_stockfish(
+        win_percentage = self.play_many_games(
             chess_game, az_player, StockfishChessPlayer(BLACK_PLAYER, engine_elo=1400)
         )
         assert 0.0 <= win_percentage <= 1.0
 
     @staticmethod
-    def play_against_stockfish(
+    def play_many_games(
         chess_game: ChessGame,
-        unknown_player: ChessPlayer,
-        stockfish_player: StockfishChessPlayer,
+        subject_player: ChessPlayer,
+        opposing_player: ChessPlayer,
         n_games: int = 10,
         verbose: bool = False,
         include_ties: bool = False,
     ) -> float:
-        assert unknown_player.id * -1 == stockfish_player.id
+        assert subject_player.id * -1 == opposing_player.id
 
         arena = Arena(
-            unknown_player,
-            player2=stockfish_player,
+            player1=subject_player,
+            player2=opposing_player,
             game=chess_game,
             display=partial(chess_game.display, verbosity=2),
         )
