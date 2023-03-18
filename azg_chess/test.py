@@ -226,7 +226,18 @@ class TestNNet:
         coach = Coach(chess_game, nnet_wrapper, coach_args)
         coach.learn()
 
-    @pytest.mark.parametrize(("mcts_args", "parameters_path"), [(MCTSArgs(), None)])
+    @pytest.mark.parametrize(
+        ("mcts_args", "parameters_path"),
+        [
+            pytest.param(MCTSArgs(), None, id="no_training_model"),
+            pytest.param(
+                MCTSArgs(), ("checkpoints", "temp.pth.tar"), id="model_in_training"
+            ),
+            pytest.param(
+                MCTSArgs(), ("checkpoints", "best.pth.tar"), id="trained_model"
+            ),
+        ],
+    )
     def test_full_game(
         self,
         chess_game: ChessGame,
