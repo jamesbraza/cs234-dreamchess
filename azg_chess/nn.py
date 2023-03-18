@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import os
+from functools import partial
 from typing import TYPE_CHECKING
 
 import chess
@@ -54,6 +55,10 @@ def embed(*boards: Board, signed: bool = True) -> npt.NDArray[int]:
     return batch_embedding
 
 
+signed_embed_pair = embed, SIGNED_EMBEDDING_SHAPE
+unsigned_embed_pair = partial(embed, signed=False), UNSIGNED_EMBEDDING_SHAPE
+
+
 def conv_conversion(
     in_shape: tuple[int, ...],
     kernel_size: int | tuple[int, ...],
@@ -102,7 +107,7 @@ class NNet(nn.Module):
         dropout_p: float = 0.8,
         embed_func_shape: tuple[
             Callable[[Board, ...], npt.NDArray[int]], tuple[int, int, int]
-        ] = (embed, SIGNED_EMBEDDING_SHAPE),
+        ] = signed_embed_pair,
     ):
         """
         Initialize.
