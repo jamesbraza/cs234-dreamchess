@@ -9,7 +9,10 @@ import numpy as np
 import torch
 from azg.MCTS import MCTS
 
-import geochri.src as geochri
+import geochri.src.alpha_net
+import geochri.src.chess_utils
+import geochri.src.encoder_decoder
+import geochri.src.MCTS_chess
 from azg_chess.game import WHITE_PLAYER, Board, action_to_move, move_to_action
 from azg_chess.nn import NNetWrapper
 
@@ -186,7 +189,7 @@ class GeochriPlayer(ChessPlayer):
         super().__init__(player_id)
         self.mcts_steps_per_move = mcts_steps_per_move
 
-        self._net = geochri.alpha_net.ChessNet()
+        self._net = geochri.src.alpha_net.ChessNet()
         if torch.cuda.is_available():
             self._net.cuda()
         self._net.share_memory()
@@ -199,21 +202,26 @@ class GeochriPlayer(ChessPlayer):
             self._net.load_state_dict(checkpoint["state_dict"])
 
     def choose_move(self, board: Board) -> chess.Move:
-        geochri_board = geochri.chess_utils.load_chessboard_to_Geochri(board)
+        geochri_board = geochri.src.chess_utils.load_chessboard_to_Geochri(board)
 
-        best_move, _ = geochri.MCTS_chess.UCT_search(
+        best_move, _ = geochri.src.MCTS_chess.UCT_search(
             geochri_board, num_reads=self.mcts_steps_per_move, net=self._net
         )
-        i_pos, f_pos, prom = geochri.encoder_decoder.decode_action(
+        i_pos, f_pos, prom = geochri.src.encoder_decoder.decode_action(
             geochri_board, encoded=best_move
         )
 
-        if prom in chess.PIECE_SYMBOLS:
-            index = chess.PIECE_SYMBOLS.index(prom)
-            promotion_piece = chess.Piece(chess.PIECE_TYPES[index], chess.BLACK)
-        elif prom.lower() in chess.PIECE_SYMBOLS:
-            index = chess.PIECE_SYMBOLS.index(prom.lower())
-            promotion_piece = chess.Piece(chess.PIECE_TYPES[index], chess.WHITE)
+        if len(prom) > 1:
+            raise NotImplementedError(f"Unhandled promotion {prom} of 2+ pieces.")
+        if len(prom) == 1:
+            if prom[0] in chess.PIECE_SYMBOLS:
+                index = chess.PIECE_SYMBOLS.index(prom[0])
+                promotion_piece = chess.Piece(chess.PIECE_TYPES[index], chess.BLACK)
+            elif prom[0].lower() in chess.PIECE_SYMBOLS:
+                index = chess.PIECE_SYMBOLS.index(prom[0].lower())
+                promotion_piece = chess.Piece(chess.PIECE_TYPES[index], chess.WHITE)
+            else:
+                raise NotImplementedError(f"Unexpected promotion piece {prom[0]}.")
         else:
             promotion_piece = None
 
