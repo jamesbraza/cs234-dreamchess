@@ -272,7 +272,7 @@ class TestNNet:
         cls,
         chess_game: ChessGame,
         unknown_elo_player: ChessPlayer,
-        unknown_elo_assumption: int = 1350,
+        unknown_elo_assumption: Elo = 1350,
         stockfish_initial_elo: Elo = 1350,
         window_width: int = 10,
         desired_stability: Elo = 100,
