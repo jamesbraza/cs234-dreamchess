@@ -1,6 +1,7 @@
 chess
 coloredlogs  # azg internals
-kaggle  # Cloning data
+kaggle  # Downloading datasets
+matplotlib  # geochri internals
 numpy>=1.21  # For numpy.typing
 tensorboard
 torch
