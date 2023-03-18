@@ -16,6 +16,7 @@ from azg_chess.nn import NNetWrapper
 if TYPE_CHECKING:
     from azg.utils import dotdict
 
+    from azg_chess.chess_utils import Elo
     from azg_chess.game import ActionIndex, ChessGame, PlayerID
 
 
@@ -81,6 +82,10 @@ class HumanChessPlayer(ChessPlayer):
                 print(f"Invalid UCI {uci_input}.")
 
 
+# NOTE: 0 is below the lowest possible Elo of 100
+NULL_ELO: Elo = 0
+
+
 class StockfishChessPlayer(ChessPlayer):
     """
     Player whose decisions are made by the Stockfish chess engine.
@@ -98,7 +103,7 @@ class StockfishChessPlayer(ChessPlayer):
         self,
         player_id: PlayerID = WHITE_PLAYER,
         engine_path: str = DEFAULT_ENGINE_PATH,
-        engine_elo: int = DEFAULT_ELO,
+        engine_elo: Elo = DEFAULT_ELO,
     ):
         super().__init__(player_id)
         self._engine = chess.engine.SimpleEngine.popen_uci(engine_path)
@@ -107,7 +112,7 @@ class StockfishChessPlayer(ChessPlayer):
         self._engine.configure({"UCI_LimitStrength": True, "UCI_Elo": engine_elo})
 
     @property
-    def elo_range(self) -> tuple[int, int]:
+    def elo_range(self) -> tuple[Elo, Elo]:
         """Get the range of Elo supported by Stockfish."""
         option = self._engine.options["UCI_Elo"]
         return option.min, option.max
