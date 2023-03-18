@@ -117,6 +117,11 @@ class StockfishChessPlayer(ChessPlayer):
         option = self._engine.options["UCI_Elo"]
         return option.min, option.max
 
+    def clip_elo(self, elo: Elo) -> Elo:
+        """Clip an Elo to be in the range supported by Stockfish."""
+        min_elo, max_elo = self.elo_range
+        return min(max(elo, min_elo), max_elo)
+
     def choose_move(self, board: Board) -> chess.Move:
         # SEE: https://python-chess.readthedocs.io/en/latest/engine.html#playing
         result = self._engine.play(board, limit=chess.engine.Limit(time=0.1))
