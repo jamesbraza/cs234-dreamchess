@@ -171,7 +171,7 @@ class TestGame:
         assert comparison(n_p1_wins, n_p2_wins)
 
 
-def outcomes_to_percentages(
+def outcomes_to_win_percentage(
     n_wins: int, n_losses: int, n_ties: int, include_ties: bool = False
 ) -> float:
     """Convert wins, losses, ties to a win percentage."""
