@@ -212,7 +212,11 @@ class CoachArgs(MCTSArgs):
 class TestNNet:
     @pytest.mark.parametrize(
         ("coach_args", "parameters_path"),
-        [(CoachArgs(), ("checkpoints", "temp.pth.tar"))],
+        [
+            pytest.param(CoachArgs(), None, id="from_scratch"),
+            pytest.param(CoachArgs(), ("checkpoints", "temp.pth.tar"), id="resume"),
+            pytest.param(CoachArgs(), ("checkpoints", "best.pth.tar"), id="iterate"),
+        ],
     )
     def test_coach(
         self,
