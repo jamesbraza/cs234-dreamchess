@@ -29,6 +29,7 @@ disable = [
     "wildcard-import",  # Wildcard imports are convenient
     "unsubscriptable-object",  # Buggy, SEE: https://github.com/PyCQA/pylint/issues/3637
     "logging-fstring-interpolation",  # f-strings are convenient
+    "unused-import",  # Let flake8's F401 handle this
 ]
 
 # Enable the message, report, category or checker with the given id(s).
