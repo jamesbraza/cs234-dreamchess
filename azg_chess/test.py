@@ -22,7 +22,7 @@ from azg_chess.game import (
     ChessGame,
     PlayerID,
 )
-from azg_chess.nn import NNetWrapper
+from azg_chess.nn import NNetWrapper, UnsignedNNetWrapper  # noqa: F401
 from azg_chess.players import (
     NULL_ELO,
     AlphaZeroChessPlayer,
@@ -203,7 +203,7 @@ class CoachArgs(MCTSArgs):
     # examples from the load_folder_file
     load_model: bool = False
     # Two-tuple of folder and filename where training examples are housed
-    load_folder_file: tuple[str, str] = "models", "best.pt.tar"
+    load_folder_file: tuple[str, str] = "checkpoints", "checkpoint_0.pth.tar"
     # Max amount of training examples to keep in the history, dropping the
     # oldest example beyond that before adding a new one (like a FIFO queue)
     numItersForTrainExamplesHistory: int = 20
@@ -211,11 +211,15 @@ class CoachArgs(MCTSArgs):
 
 class TestNNet:
     @pytest.mark.parametrize(
-        ("coach_args", "parameters_path"),
+        ("coach_args", "parameters_path", "preload_examples"),
         [
-            pytest.param(CoachArgs(), None, id="from_scratch"),
-            pytest.param(CoachArgs(), ("checkpoints", "temp.pth.tar"), id="resume"),
-            pytest.param(CoachArgs(), ("checkpoints", "best.pth.tar"), id="iterate"),
+            pytest.param(CoachArgs(), None, False, id="from_scratch"),
+            pytest.param(
+                CoachArgs(), ("checkpoints", "temp.pth.tar"), True, id="resume"
+            ),
+            pytest.param(
+                CoachArgs(), ("checkpoints", "best.pth.tar"), False, id="iterate"
+            ),
         ],
     )
     def test_coach(
@@ -223,11 +227,14 @@ class TestNNet:
         chess_game: ChessGame,
         coach_args: CoachArgs,
         parameters_path: tuple[str, str] | None,
+        preload_examples: bool,
     ) -> None:
         nnet_wrapper = NNetWrapper(chess_game)
         if parameters_path is not None:
             nnet_wrapper.load_checkpoint(*parameters_path)
         coach = Coach(chess_game, nnet_wrapper, coach_args)
+        if preload_examples:
+            coach.loadTrainExamples()
         coach.learn()
 
     @pytest.mark.parametrize(
