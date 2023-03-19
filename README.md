@@ -129,7 +129,7 @@ Whew, I almost used `conda`, that was a close call.
 Step 1: install and configure Python 3.10:
 
 ```console
-> python3 --version  # 3.8.10
+python3 --version  # 3.8.10
 sudo apt update && sudo apt upgrade -y
 sudo add-apt-repository -y ppa:deadsnakes/ppa
 sudo apt install -y python3.10 python3.10-venv
@@ -145,7 +145,7 @@ git clone --recurse-submodules https://github.com/jamesbraza/cs234-dreamchess.gi
 cd cs234-dreamchess
 python3 -m venv venv
 source venv/bin/activate
-python -m pip install -r requirements.txt \
+python -m pip install -r requirements.txt --progress-bar off \
     -r requirements-qa.txt \
     torch==1.13.1+cpu -f https://download.pytorch.org/whl/torch_stable.html
 ```
