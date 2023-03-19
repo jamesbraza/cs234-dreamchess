@@ -229,7 +229,7 @@ class TestNNet:
         parameters_path: tuple[str, str] | None,
         preload_examples: bool,
     ) -> None:
-        nnet_wrapper = NNetWrapper(chess_game)
+        nnet_wrapper = UnsignedNNetWrapper(chess_game)
         if parameters_path is not None:
             nnet_wrapper.load_checkpoint(*parameters_path)
         coach = Coach(chess_game, nnet_wrapper, coach_args)
