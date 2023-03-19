@@ -29,7 +29,9 @@ def discern_gpu_mac_cpu_device() -> torch.device:
     if torch.cuda.is_available():
         return torch.device("cuda")
     if torch.backends.mps.is_available():
-        return torch.device("mps")
+        # As of 3/18/2023, nn.Conv3d was not supported on the mps backend per
+        # https://github.com/pytorch/pytorch/issues/77764
+        pass
     return torch.device("cpu")  # Fallback
 
 
@@ -166,8 +168,9 @@ class NNet(nn.Module):
 
     def embed(self, *boards: Board, device: torch.device | None = None) -> torch.Tensor:
         """Embed the input boards into a Tensor for the forward pass."""
-        # FloatTensor is needed for gradient computations
-        return torch.FloatTensor(self._embed_func(*boards), device=device)
+        return torch.tensor(
+            self._embed_func(*boards), dtype=torch.float32, device=device
+        )
 
     def forward(self, boards: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """
@@ -180,6 +183,7 @@ class NNet(nn.Module):
             Tuple of policy scores of shape (B, |A|), value in [-1, 1] of shape (B, 1).
         """
         s = boards.unsqueeze(1)  # B, 1, D, X, Y
+        # NOTE: this sets requires_grad = True, if not already set
         s = self.conv_layers(s)  # B, C, D - 2 * 2, X - 2 * 2, Y - 2 * 2
         s = self.fc_layers(s)  # B, |A|
         return self.policy_head(s), self.value_head(s)  # (B, |A|), (B, 1)
@@ -209,13 +213,12 @@ class NNetWrapper(NeuralNet):
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Calculate pi, V, and total loss given example data."""
         pred_pis, pred_vs = self.nnet(self.nnet.embed(*boards, device=self._device))
-        loss_pi = nn.functional.cross_entropy(
-            input=pred_pis, target=torch.FloatTensor(true_pis)
+        true_pis, true_vs = (
+            torch.tensor(x, device=self._device, dtype=torch.float32)
+            for x in [true_pis, true_vs]
         )
-        loss_v = nn.functional.mse_loss(
-            input=pred_vs.reshape(-1),
-            target=torch.FloatTensor(true_vs),
-        )
+        loss_pi = nn.functional.cross_entropy(input=pred_pis, target=true_pis)
+        loss_v = nn.functional.mse_loss(input=pred_vs.reshape(-1), target=true_vs)
         return loss_pi, loss_v, loss_pi + loss_v
 
     def train(  # pylint: disable=too-many-locals
