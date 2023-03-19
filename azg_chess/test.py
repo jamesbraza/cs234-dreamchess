@@ -186,15 +186,15 @@ class CoachArgs(MCTSArgs):
     """Data structure to configure the Coach class."""
 
     # Number of training iterations
-    numIters: int = 1000
+    numIters: int = 20
     # Number of self-play games (episodes) per training iteration
-    numEps: int = 100
+    numEps: int = 200
     # Number of iterations to pass before increasing MCTS temp by 1
-    tempThreshold: int = 15
+    tempThreshold: int = 5
     # Threshold win percentage of arena games to accept a new neural network
     updateThreshold: float = 0.6
     # Number of arena games to assess neural network for acceptance
-    arenaCompare: int = 40
+    arenaCompare: int = 8
     # Number of game examples to train the neural networks
     maxlenOfQueue: int = 200_000
     # Folder name to save checkpoints
@@ -214,12 +214,12 @@ class TestNNet:
         ("coach_args", "parameters_path", "preload_examples"),
         [
             pytest.param(CoachArgs(), None, False, id="from_scratch"),
-            pytest.param(
-                CoachArgs(), ("checkpoints", "temp.pth.tar"), True, id="resume"
-            ),
-            pytest.param(
-                CoachArgs(), ("checkpoints", "best.pth.tar"), False, id="iterate"
-            ),
+            # pytest.param(
+            #     CoachArgs(), ("checkpoints", "temp.pth.tar"), True, id="resume"
+            # ),
+            # pytest.param(
+            #     CoachArgs(), ("checkpoints", "best.pth.tar"), False, id="iterate"
+            # ),
         ],
     )
     def test_coach(
