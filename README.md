@@ -126,7 +126,7 @@ Python 3.9.16
 
 Whew, I almost used `conda`, that was a close call.
 
-Step 1: install and configure Python 3.10:
+**Step 1**: install and configure Python 3.10:
 
 ```console
 python3 --version  # 3.8.10
@@ -138,7 +138,7 @@ sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 
 python3 --version  # 3.10.10
 ```
 
-Step 2: `git clone` and install requirements into a `venv`:
+**Step 2**: `git clone` and install requirements into a `venv`:
 
 ```console
 git clone --recurse-submodules https://github.com/jamesbraza/cs234-dreamchess.git
@@ -155,6 +155,14 @@ trick installs a CPU-only version of PyTorch 1.13.1 (since this AMI has no GPU).
 
 I didn't want to use PyTorch 2.0 since it was released this week,
 and likely has some bugs.
+
+**Step 3**: kick off your `azg_chess` script:
+
+```console
+tmux
+source venv/bin/activate
+python -m azg_chess.script
+```
 
 [1]: https://www.kaggle.com/datasets/milesh1/35-million-chess-games
 [2]: https://chessdb.sourceforge.net/
