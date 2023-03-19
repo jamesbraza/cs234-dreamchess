@@ -13,5 +13,10 @@ Useful Links:
 import os
 import sys
 
-# Enable azg submodule to be seen
-sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir, "azg"))
+REPO_ROOT = os.path.join(os.path.dirname(__file__), os.pardir)
+
+# Add repo root to system path so `from azg.xyz` imports work from within
+# azg_chess module
+sys.path.append(REPO_ROOT)
+# Add azg to system path so `from xyz` imports work from within azg submodule
+sys.path.append(os.path.join(REPO_ROOT, "azg"))

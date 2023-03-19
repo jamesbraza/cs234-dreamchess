@@ -111,6 +111,59 @@ python -m pip install -r requirements-qa.txt
 pre-commit install
 ```
 
+### Getting Started: AWS
+
+I launched several AWS
+Deep Learning AMI GPU PyTorch 1.13.1 (Ubuntu 20.04) 20230315's
+with instance type t2.micro (free tier).
+Here's how they were configured:
+
+```console
+> source activate pytorch
+> python --version
+Python 3.9.16
+```
+
+Whew, I almost used `conda`, that was a close call.
+
+**Step 1**: install and configure Python 3.10:
+
+```console
+python3 --version  # 3.8.10
+sudo apt update && sudo apt upgrade -y
+sudo add-apt-repository -y ppa:deadsnakes/ppa
+sudo apt install -y python3.10 python3.10-venv
+sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.8 1
+sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 2
+python3 --version  # 3.10.10
+```
+
+**Step 2**: `git clone` and install requirements into a `venv`:
+
+```console
+git clone --recurse-submodules https://github.com/jamesbraza/cs234-dreamchess.git
+cd cs234-dreamchess
+python3 -m venv venv
+source venv/bin/activate
+python -m pip install -r requirements.txt --progress-bar off \
+    -r requirements-qa.txt \
+    torch==1.13.1+cpu -f https://download.pytorch.org/whl/torch_stable.html
+```
+
+Note the `torch==1.13.1+cpu -f https://download.pytorch.org/whl/torch_stable.html`
+trick installs a CPU-only version of PyTorch 1.13.1 (since this AMI has no GPU).
+
+I didn't want to use PyTorch 2.0 since it was released this week,
+and likely has some bugs.
+
+**Step 3**: kick off your `azg_chess` script:
+
+```console
+tmux
+source venv/bin/activate
+python -m azg_chess.script
+```
+
 [1]: https://www.kaggle.com/datasets/milesh1/35-million-chess-games
 [2]: https://chessdb.sourceforge.net/
 [3]: https://github.com/Kaggle/kaggle-api
