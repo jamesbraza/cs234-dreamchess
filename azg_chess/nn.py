@@ -23,6 +23,18 @@ if TYPE_CHECKING:
 
     from azg_chess.game import Board, ChessGame, Policy
 
+
+def discern_gpu_mac_cpu_device() -> torch.device:
+    """Discern which torch.device to use in cuda (1st), mps (2nd), cpu (3rd)."""
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if torch.backends.mps.is_available():
+        # As of 3/18/2023, nn.Conv3d was not supported on the mps backend per
+        # https://github.com/pytorch/pytorch/issues/77764
+        pass
+    return torch.device("cpu")  # Fallback
+
+
 # Match nn.Conv3d shape of D, X, Y
 SIGNED_EMBEDDING_SHAPE: tuple[int, int, int] = NUM_PIECES, *BOARD_DIMENSIONS
 UNSIGNED_EMBEDDING_SHAPE: tuple[int, int, int] = 2 * NUM_PIECES, *BOARD_DIMENSIONS
@@ -154,10 +166,11 @@ class NNet(nn.Module):
             nn.Tanh(),
         )
 
-    def embed(self, *boards: Board) -> torch.Tensor:
+    def embed(self, *boards: Board, device: torch.device | None = None) -> torch.Tensor:
         """Embed the input boards into a Tensor for the forward pass."""
-        # FloatTensor is needed for gradient computations
-        return torch.FloatTensor(self._embed_func(*boards))
+        return torch.tensor(
+            self._embed_func(*boards), dtype=torch.float32, device=device
+        )
 
     def forward(self, boards: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """
@@ -170,6 +183,7 @@ class NNet(nn.Module):
             Tuple of policy scores of shape (B, |A|), value in [-1, 1] of shape (B, 1).
         """
         s = boards.unsqueeze(1)  # B, 1, D, X, Y
+        # NOTE: this sets requires_grad = True, if not already set
         s = self.conv_layers(s)  # B, C, D - 2 * 2, X - 2 * 2, Y - 2 * 2
         s = self.fc_layers(s)  # B, |A|
         return self.policy_head(s), self.value_head(s)  # (B, |A|), (B, 1)
@@ -178,9 +192,18 @@ class NNet(nn.Module):
 class NNetWrapper(NeuralNet):
     """Neural network wrapper adaptation for chess."""
 
-    def __init__(self, game: ChessGame, **nnet_kwargs):
+    def __init__(
+        self, game: ChessGame, device: torch.device | bool | None = True, **nnet_kwargs
+    ):
         super().__init__(game)
         self.nnet = NNet(game, **nnet_kwargs)
+        if isinstance(device, bool) and device:
+            device = discern_gpu_mac_cpu_device()
+        if isinstance(device, torch.device):
+            self._device: torch.device | None = device
+            self.nnet.to(device=self._device)
+        else:  # None or False
+            self._device = None
 
     def _calculate_losses(
         self,
@@ -189,14 +212,13 @@ class NNetWrapper(NeuralNet):
         true_vs: Sequence[float],
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Calculate pi, V, and total loss given example data."""
-        pred_pis, pred_vs = self.nnet(self.nnet.embed(*boards))
-        loss_pi = nn.functional.cross_entropy(
-            input=pred_pis, target=torch.FloatTensor(true_pis)
+        pred_pis, pred_vs = self.nnet(self.nnet.embed(*boards, device=self._device))
+        true_pis, true_vs = (
+            torch.tensor(x, device=self._device, dtype=torch.float32)
+            for x in [true_pis, true_vs]
         )
-        loss_v = nn.functional.mse_loss(
-            input=pred_vs.reshape(-1),
-            target=torch.FloatTensor(true_vs),
-        )
+        loss_pi = nn.functional.cross_entropy(input=pred_pis, target=true_pis)
+        loss_v = nn.functional.mse_loss(input=pred_vs.reshape(-1), target=true_vs)
         return loss_pi, loss_v, loss_pi + loss_v
 
     def train(  # pylint: disable=too-many-locals
@@ -265,7 +287,7 @@ class NNetWrapper(NeuralNet):
         """
         self.nnet.eval()
         with torch.no_grad():
-            pi, v = self.nnet(self.nnet.embed(board))
+            pi, v = self.nnet(self.nnet.embed(board, device=self._device))
         # NOTE: [0] is to unbatch
         return nn.functional.softmax(pi, dim=1)[0].numpy(), float(v[0])
 
@@ -281,3 +303,12 @@ class NNetWrapper(NeuralNet):
         """Load in NN's parameters from the folder/filename."""
         checkpoint = torch.load(f=os.path.join(folder, filename))
         self.nnet.load_state_dict(checkpoint["model_state_dict"])
+
+
+class UnsignedNNetWrapper(NNetWrapper):
+    """Wrapper that specifies the unsigned embedding function by default."""
+
+    def __init__(self, game: ChessGame, **kwargs):
+        # Since Coach.py instantiates pnet based on class alone (and not args),
+        # this subclass needs to exist to specify the unsigned embedding
+        super().__init__(game, **({"embed_func_shape": unsigned_embed_pair} | kwargs))
