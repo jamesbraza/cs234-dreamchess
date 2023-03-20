@@ -10,7 +10,12 @@ import torch
 from azg.MCTS import MCTS
 from azg.utils import dotdict
 
-import geochri.src as geochri
+import geochri.src.alpha_net as alpha_net
+import geochri.src.chess_utils as chess_utils
+import geochri.src.MCTS_chess as MCTS_chess
+import geochri.src.encoder_decoder as encoder_decoder
+
+
 from azg_chess.game import WHITE_PLAYER, Board, action_to_move, move_to_action
 from azg_chess.nn import NNetWrapper
 
@@ -164,12 +169,12 @@ class GeochriPlayer(ChessPlayer):
         self,
         player_id: PlayerID = WHITE_PLAYER,
         parameters_file: str | None = None,
-        mcts_steps_per_move: int = 250,
+        mcts_steps_per_move: int = 50,
     ):
         super().__init__(player_id)
         self.mcts_steps_per_move = mcts_steps_per_move
 
-        self._net = geochri.alpha_net.ChessNet()
+        self._net = alpha_net.ChessNet()
         if torch.cuda.is_available():
             self._net.cuda()
         self._net.share_memory()
@@ -182,23 +187,24 @@ class GeochriPlayer(ChessPlayer):
             self._net.load_state_dict(checkpoint["state_dict"])
 
     def choose_move(self, board: Board) -> chess.Move:
-        geochri_board = geochri.chess_utils.load_chessboard_to_Geochri(board)
+        geochri_board = chess_utils.load_chessboard_to_Geochri(board)
 
-        best_move, _ = geochri.MCTS_chess.UCT_search(
+        best_move, _ = MCTS_chess.UCT_search(
             geochri_board, num_reads=self.mcts_steps_per_move, net=self._net
         )
-        i_pos, f_pos, prom = geochri.encoder_decoder.decode_action(
+        i_pos, f_pos, prom = encoder_decoder.decode_action(
             geochri_board, encoded=best_move
         )
 
-        if prom in chess.PIECE_SYMBOLS:
-            index = chess.PIECE_SYMBOLS.index(prom)
-            promotion_piece = chess.Piece(chess.PIECE_TYPES[index], chess.BLACK)
-        elif prom.lower() in chess.PIECE_SYMBOLS:
-            index = chess.PIECE_SYMBOLS.index(prom.lower())
-            promotion_piece = chess.Piece(chess.PIECE_TYPES[index], chess.WHITE)
-        else:
+        if prom[0] is None:
             promotion_piece = None
+        else:
+            if prom[0] in chess.PIECE_SYMBOLS:
+                index = chess.PIECE_SYMBOLS.index(prom[0])
+                promotion_piece = chess.PIECE_TYPES[index]
+            elif prom[0].lower() in chess.PIECE_SYMBOLS:
+                index = chess.PIECE_SYMBOLS.index(prom[0].lower())
+                promotion_piece = chess.PIECE_TYPES[index]
 
         from_square = chess.parse_square(chr(i_pos[0][1] + 97) + str(8 - i_pos[0][0]))
         to_square = chess.parse_square(chr(f_pos[0][1] + 97) + str(8 - f_pos[0][0]))
