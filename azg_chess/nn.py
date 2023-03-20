@@ -92,7 +92,7 @@ def conv_conversion(
 
 
 class ResidualBlock(nn.Module):
-    """Basic residual block based on two Conv3d with BatchNorm3ds."""
+    """Basic residual block based on two Conv2d with BatchNorm2ds."""
 
     DEFAULT_CONV_KWARGS = {"kernel_size": 3, "padding": 1, "bias": False, "stride": 1}
 
@@ -100,11 +100,11 @@ class ResidualBlock(nn.Module):
         super().__init__()
         conv_kwargs = self.DEFAULT_CONV_KWARGS | conv_kwargs
         self.non_residual = nn.Sequential(
-            nn.Conv3d(in_channels, out_channels, **conv_kwargs),
-            nn.BatchNorm3d(out_channels),
+            nn.Conv2d(in_channels, out_channels, **conv_kwargs),
+            nn.BatchNorm2d(out_channels),
             nn.ReLU(),
-            nn.Conv3d(out_channels, out_channels, **conv_kwargs),
-            nn.BatchNorm3d(out_channels),
+            nn.Conv2d(out_channels, out_channels, **conv_kwargs),
+            nn.BatchNorm2d(out_channels),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -141,9 +141,10 @@ class NNet(nn.Module):
                 output shape.
         """
         super().__init__()
+        self._embed_func, shape = embed_func_shape
         self.residual_tower = nn.Sequential(
-            nn.Conv3d(1, residual_channels, kernel_size=3, padding=1),
-            nn.BatchNorm3d(residual_channels),
+            nn.Conv2d(shape[0], residual_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(residual_channels),
             nn.ReLU(),
             *(
                 ResidualBlock(residual_channels, residual_channels)
@@ -153,23 +154,23 @@ class NNet(nn.Module):
 
         # NOTE: confirm this matches, as otherwise the fully-connected layers'
         # input shape would not be larger than the action size
-        self._embed_func, shape = embed_func_shape
-        assert policy_channels * math.prod(shape) >= game.getActionSize()
+        policy_hidden_channels = policy_channels * math.prod(shape[1:])
+        assert policy_hidden_channels >= game.getActionSize()
         # NOTE: leave pi as raw scores (don't apply Softmax) to directly use
         # nn.functional.cross_entropy
         self.policy_head = nn.Sequential(
-            nn.Conv3d(residual_channels, policy_channels, kernel_size=1),
-            nn.BatchNorm3d(policy_channels),
+            nn.Conv2d(residual_channels, policy_channels, kernel_size=1),
+            nn.BatchNorm2d(policy_channels),
             nn.ReLU(),
             nn.Flatten(),
-            nn.Linear(policy_channels * math.prod(shape), game.getActionSize()),
+            nn.Linear(policy_hidden_channels, game.getActionSize()),
         )
         self.value_head = nn.Sequential(
-            nn.Conv3d(residual_channels, 1, kernel_size=1),
-            nn.BatchNorm3d(1),
+            nn.Conv2d(residual_channels, 1, kernel_size=1),
+            nn.BatchNorm2d(1),
             nn.ReLU(),
             nn.Flatten(),
-            nn.Linear(1 * math.prod(shape), value_hidden_units),
+            nn.Linear(1 * math.prod(shape[1:]), value_hidden_units),
             nn.Dropout(dropout_p),  # Apply before ReLU, for computational efficiency
             nn.ReLU(),
             nn.Linear(value_hidden_units, 1),
@@ -192,9 +193,8 @@ class NNet(nn.Module):
         Returns:
             Tuple of policy scores of shape (B, |A|), value in [-1, 1] of shape (B, 1).
         """
-        s = boards.unsqueeze(1)  # B, 1, D, X, Y
         # NOTE: this sets requires_grad = True, if not already set
-        s = self.residual_tower(s)  # B, C, D, X, Y
+        s = self.residual_tower(boards)  # B, C, D, X, Y
         return self.policy_head(s), self.value_head(s)  # (B, |A|), (B, 1)
 
 
