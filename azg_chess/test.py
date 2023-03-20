@@ -214,31 +214,30 @@ class CoachArgs(MCTSArgs):  # pylint: disable=too-many-instance-attributes
 
 class TestNNet:
     @pytest.mark.parametrize(
-        ("coach_args", "preload_examples"),
+        ("coach_args", "parameters_path", "preload_examples"),
         [
-            pytest.param(CoachArgs(), False, id="from_scratch"),
+            pytest.param(CoachArgs(), None, False, id="from_scratch"),
             pytest.param(
-                CoachArgs(
-                    load_model=True, load_folder_file=("checkpoints", "temp.pth.tar")
-                ),
+                CoachArgs(load_model=True),
+                ("checkpoints", "temp.pth.tar"),
                 True,
                 id="resume",
             ),
             pytest.param(
-                CoachArgs(
-                    load_model=True, load_folder_file=("checkpoints", "best.pth.tar")
-                ),
-                False,
-                id="iterate",
+                CoachArgs(), ("checkpoints", "best.pth.tar"), False, id="iterate"
             ),
         ],
     )
     def test_coach(
-        self, chess_game: ChessGame, coach_args: CoachArgs, preload_examples: bool
+        self,
+        chess_game: ChessGame,
+        coach_args: CoachArgs,
+        parameters_path: tuple[str, str] | None,
+        preload_examples: bool,
     ) -> None:
         nnet_wrapper = NNetWrapper(chess_game)
-        if coach_args.load_model:
-            nnet_wrapper.load_checkpoint(*coach_args.load_folder_file)
+        if coach_args.load_model and parameters_path is not None:
+            nnet_wrapper.load_checkpoint(*parameters_path)
         coach = Coach(chess_game, nnet_wrapper, coach_args)
         if preload_examples:
             coach.loadTrainExamples()
