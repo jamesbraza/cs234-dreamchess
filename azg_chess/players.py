@@ -213,13 +213,11 @@ class GeochriPlayer(ChessPlayer):
             if prom[0] in chess.PIECE_SYMBOLS:
                 index = chess.PIECE_SYMBOLS.index(prom[0])
                 return chess.Piece(chess.PIECE_TYPES[index], chess.BLACK)
-            elif prom[0].lower() in chess.PIECE_SYMBOLS:
+            if prom[0].lower() in chess.PIECE_SYMBOLS:
                 index = chess.PIECE_SYMBOLS.index(prom[0].lower())
                 return chess.Piece(chess.PIECE_TYPES[index], chess.WHITE)
-            else:
-                raise NotImplementedError(f"Unexpected promotion piece {prom[0]}.")
-        else:
-            return None
+            raise NotImplementedError(f"Unexpected promotion piece {prom[0]}.")
+        return None
 
     def choose_move(self, board: Board) -> chess.Move:
         geochri_board = geochri.src.chess_utils.load_chessboard_to_Geochri(board)
