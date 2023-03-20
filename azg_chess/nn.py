@@ -117,8 +117,10 @@ class NNet(nn.Module):
     def __init__(
         self,
         game: ChessGame,
-        residual_channels: int = 64,
-        value_hidden_units: int = 128,
+        residual_channels: int = 256,
+        num_residual_layers: int = 19,
+        policy_channels: int = 6,
+        value_hidden_units: int = 256,
         dropout_p: float = 0.8,
         embed_func_shape: tuple[
             Callable[[Board, ...], npt.NDArray[int]], tuple[int, int, int]
@@ -131,8 +133,10 @@ class NNet(nn.Module):
             game: Game, to extract action sizes and confirm board size.
             residual_channels: Number of channels in the residual layers,
                 referred to as C sometimes below.
+            num_residual_layers: Number of residual layers.
+            policy_channels: Number of channels in the policy network.
             value_hidden_units: Number of hidden units in the value network.
-            dropout_p: Dropout percentage.
+            dropout_p: Dropout percentage in the value network.
             embed_func_shape: Two tuple of embedding function and its per-board
                 output shape.
         """
@@ -141,32 +145,31 @@ class NNet(nn.Module):
             nn.Conv3d(1, residual_channels, kernel_size=3, padding=1),
             nn.BatchNorm3d(residual_channels),
             nn.ReLU(),
-            ResidualBlock(residual_channels, residual_channels),
-            ResidualBlock(residual_channels, residual_channels),
-            nn.Conv3d(residual_channels, residual_channels, kernel_size=3),
-            nn.BatchNorm3d(residual_channels),
-            nn.ReLU(),
+            *(
+                ResidualBlock(residual_channels, residual_channels)
+                for _ in range(num_residual_layers)
+            ),
         )
-        self._embed_func, shape = embed_func_shape
+
         # NOTE: confirm this matches, as otherwise the fully-connected layers'
-        # input shape would not be correct
-        assert game.getBoardSize() == shape[1:]
-        self._fc_layers_in_shape = residual_channels * math.prod(
-            conv_conversion(shape, kernel_size=3)
-        )
-        self.fc_layers = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(self._fc_layers_in_shape, game.getActionSize()),
-            nn.BatchNorm1d(game.getActionSize()),
-            nn.Dropout(dropout_p),  # Apply before ReLU, for computational efficiency
-            nn.ReLU(),
-        )
+        # input shape would not be larger than the action size
+        self._embed_func, shape = embed_func_shape
+        assert policy_channels * math.prod(shape), game.getActionSize()
         # NOTE: leave pi as raw scores (don't apply Softmax) to directly use
         # nn.functional.cross_entropy
-        self.policy_head = nn.Linear(game.getActionSize(), game.getActionSize())
+        self.policy_head = nn.Sequential(
+            nn.Conv3d(residual_channels, policy_channels, kernel_size=1),
+            nn.BatchNorm3d(policy_channels),
+            nn.ReLU(),
+            nn.Flatten(),
+            nn.Linear(policy_channels * math.prod(shape), game.getActionSize()),
+        )
         self.value_head = nn.Sequential(
-            nn.Linear(game.getActionSize(), value_hidden_units),
-            nn.BatchNorm1d(value_hidden_units),
+            nn.Conv3d(residual_channels, 1, kernel_size=1),
+            nn.BatchNorm3d(1),
+            nn.ReLU(),
+            nn.Flatten(),
+            nn.Linear(1 * math.prod(shape), value_hidden_units),
             nn.Dropout(dropout_p),  # Apply before ReLU, for computational efficiency
             nn.ReLU(),
             nn.Linear(value_hidden_units, 1),
@@ -191,8 +194,7 @@ class NNet(nn.Module):
         """
         s = boards.unsqueeze(1)  # B, 1, D, X, Y
         # NOTE: this sets requires_grad = True, if not already set
-        s = self.residual_tower(s)  # B, C, D - 2 * 2, X - 2 * 2, Y - 2 * 2
-        s = self.fc_layers(s)  # B, |A|
+        s = self.residual_tower(s)  # B, C, D, X, Y
         return self.policy_head(s), self.value_head(s)  # (B, |A|), (B, 1)
 
 
