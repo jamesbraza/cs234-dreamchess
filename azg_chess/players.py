@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, NamedTuple, Protocol, TypeVar
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Protocol, TypeVar
 
 import chess
 import chess.engine
@@ -134,7 +135,8 @@ class StockfishChessPlayer(ChessPlayer):
         self._engine.close()
 
 
-class MCTSArgs(NamedTuple):
+@dataclass
+class MCTSArgs:
     """
     Data structure to configure Monte-Carlo Tree Search object.
 
