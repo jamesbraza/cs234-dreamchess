@@ -187,7 +187,7 @@ class GeochriPlayer(ChessPlayer):
         self,
         player_id: PlayerID = WHITE_PLAYER,
         parameters_file: str | None = None,
-        mcts_steps_per_move: int = 250,
+        mcts_steps_per_move: int = 25,
     ):
         super().__init__(player_id)
         self.mcts_steps_per_move = mcts_steps_per_move
@@ -216,7 +216,7 @@ class GeochriPlayer(ChessPlayer):
 
         if len(prom) > 1:
             raise NotImplementedError(f"Unhandled promotion {prom} of 2+ pieces.")
-        if len(prom) == 1:
+        if len(prom) == 1 and prom[0] is not None:
             if prom[0] in chess.PIECE_SYMBOLS:
                 index = chess.PIECE_SYMBOLS.index(prom[0])
                 promotion_piece = chess.Piece(chess.PIECE_TYPES[index], chess.BLACK)
