@@ -193,8 +193,30 @@ class NNetWrapper(NeuralNet):
     """Neural network wrapper adaptation for chess."""
 
     def __init__(
-        self, game: ChessGame, device: torch.device | bool | None = True, **nnet_kwargs
+        self,
+        game: ChessGame,
+        *,
+        device: torch.device | bool | None = True,
+        **nnet_kwargs,
     ):
+        """
+        Initialize.
+
+        NOTE: Coach.py instantiates a pnet via NeuralNet.__class__ and
+        positionally passes it just the game. So:
+        1. Required that the signature's only positional arg be a game.
+        2. All other arguments required should be defaulted (hence device's
+           default to True). This may force a subclassing, when composition
+           would normally be used.
+
+        Args:
+            game: Chess game.
+            device: Device to cast Tensors internally.
+                Set True (default) to discern the appropriate torch.device.
+                Set to a torch.device directly.
+                Set False or None to not specify a torch.device.
+            **nnet_kwargs: Keyword arguments to pass onto the internal NNet.
+        """
         super().__init__(game)
         self.nnet = NNet(game, **nnet_kwargs)
         if isinstance(device, bool) and device:
@@ -229,7 +251,7 @@ class NNetWrapper(NeuralNet):
         l2_coefficient: float = 1e-4,
     ) -> None:
         """
-        Train on a bunch of examples.
+        Train the internal NNet on a bunch of examples.
 
         Args:
             examples: Pre-shuffled sequence of examples, where each is a tuple
@@ -292,7 +314,7 @@ class NNetWrapper(NeuralNet):
         return nn.functional.softmax(pi, dim=1)[0].numpy(), float(v[0])
 
     def save_checkpoint(self, folder: str, filename: str) -> None:
-        """Save the NN's parameters to the folder/filename."""
+        """Save the internal NNet's parameters to the folder/filename."""
         os.makedirs(folder, exist_ok=True)  # NOTE: recursive
         torch.save(
             {"model_state_dict": self.nnet.state_dict()},
@@ -300,7 +322,7 @@ class NNetWrapper(NeuralNet):
         )
 
     def load_checkpoint(self, folder: str, filename: str) -> None:
-        """Load in NN's parameters from the folder/filename."""
+        """Load in internal NNet's parameters from the folder/filename."""
         checkpoint = torch.load(f=os.path.join(folder, filename))
         self.nnet.load_state_dict(checkpoint["model_state_dict"])
 
@@ -309,6 +331,6 @@ class UnsignedNNetWrapper(NNetWrapper):
     """Wrapper that specifies the unsigned embedding function by default."""
 
     def __init__(self, game: ChessGame, **kwargs):
-        # Since Coach.py instantiates pnet based on class alone (and not args),
-        # this subclass needs to exist to specify the unsigned embedding
+        # SEE: parent class's __init__ docstring for why this subclass exists to
+        # specify the unsigned embedding statically (instead of via composition)
         super().__init__(game, **({"embed_func_shape": unsigned_embed_pair} | kwargs))
