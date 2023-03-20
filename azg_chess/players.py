@@ -159,10 +159,11 @@ class AlphaZeroChessPlayer(ChessPlayer):
         player_id: PlayerID = WHITE_PLAYER,
         mcts_args: MCTSArgs | dotdict = DEFAULT_MCTS_ARGS,
         parameters_path: tuple[str, str] | None = None,
+        nnet_type: type[NNetWrapper] = NNetWrapper,
         **nnet_wrapper_kwargs,
     ):
         super().__init__(player_id)
-        self._nnet = NNetWrapper(game, **nnet_wrapper_kwargs)
+        self._nnet = nnet_type(game, **nnet_wrapper_kwargs)
         self._nnet.nnet.eval()  # Place into eval mode
         if parameters_path is not None:
             self._nnet.load_checkpoint(*parameters_path)

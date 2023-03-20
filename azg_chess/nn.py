@@ -168,7 +168,7 @@ class NNet(nn.Module):
 
     def embed(self, *boards: Board, device: torch.device | None = None) -> torch.Tensor:
         """Embed the input boards into a Tensor for the forward pass."""
-        return torch.tensor(
+        return torch.as_tensor(
             self._embed_func(*boards), dtype=torch.float32, device=device
         )
 
@@ -237,9 +237,7 @@ class NNetWrapper(NeuralNet):
         pred_pis, pred_vs = self.nnet(self.nnet.embed(*boards, device=self._device))
         # Why cast to np.array? SEE: https://github.com/pytorch/pytorch/issues/13918
         true_pis, true_vs = (
-            torch.tensor(
-                np.array(x, dtype=float), device=self._device, dtype=torch.float32
-            )
+            torch.as_tensor(np.array(x, dtype=np.float32), device=self._device)
             for x in [true_pis, true_vs]
         )
         loss_pi = nn.functional.cross_entropy(input=pred_pis, target=true_pis)
