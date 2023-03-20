@@ -1,5 +1,6 @@
 import collections
 import math
+import os
 from dataclasses import dataclass
 from functools import partial
 from operator import gt, lt
@@ -28,6 +29,7 @@ from azg_chess.players import (
     NULL_ELO,
     AlphaZeroChessPlayer,
     ChessPlayer,
+    GeochriPlayer,
     MCTSArgs,
     RandomChessPlayer,
     StockfishChessPlayer,
@@ -265,13 +267,39 @@ class TestNNet:
             chess_game, WHITE_PLAYER, mcts_args, parameters_path
         )
 
-        outcomes_1350_elo = self.play_many_games(
+        # 1. Play AlphaZeroChessPlayer against 1350 Elo and random players
+        outcomes_az_1350_elo = self.play_many_games(
             chess_game, az_player, StockfishChessPlayer(BLACK_PLAYER, engine_elo=1350)
         )
-        outcomes_random = self.play_many_games(
+        print(f"AlphaZeroChessPlayer against 1350 Elo: {outcomes_az_1350_elo}.")
+        outcomes_az_random = self.play_many_games(
             chess_game, az_player, RandomChessPlayer(BLACK_PLAYER)
         )
-        _ = outcomes_1350_elo, outcomes_random
+        print(f"AlphaZeroChessPlayer against random: {outcomes_az_random}.")
+
+        geochri_player = GeochriPlayer(
+            BLACK_PLAYER,
+            parameters_file=os.path.expanduser("~/Downloads/geochri_weights.tar"),
+        )
+
+        # 2. Play GeochriPlayer against 1350 Elo and random players
+        outcomes_geochri_1350_elo = self.play_many_games(
+            chess_game,
+            geochri_player,
+            StockfishChessPlayer(WHITE_PLAYER, engine_elo=1350),
+        )
+        print(f"GeochriPlayer against 1350 Elo: {outcomes_geochri_1350_elo}.")
+        outcomes_geochri_random = self.play_many_games(
+            chess_game, geochri_player, RandomChessPlayer(WHITE_PLAYER)
+        )
+        print(f"GeochriPlayer against random: {outcomes_geochri_random}.")
+
+        # 3. Play AlphaZeroChessPlayer against GeochriPlayer
+        outcomes_az_geochri = self.play_many_games(
+            chess_game, az_player, geochri_player
+        )
+        print(f"AlphaZeroChessPlayer against GeochriPlayer: {outcomes_az_geochri}.")
+        _ = 0  # Debug here
 
     @staticmethod
     def play_many_games(
