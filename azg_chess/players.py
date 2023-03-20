@@ -204,6 +204,19 @@ class GeochriPlayer(ChessPlayer):
             )
             self._net.load_state_dict(checkpoint["state_dict"])
 
+    @staticmethod
+    def _parse_promotion(prom: list[str | None]) -> chess.PieceType | None:
+        """Convert a geochri promotion into a promotion piece type, or None."""
+        if len(prom) > 1:
+            raise NotImplementedError(f"Unhandled promotion {prom} of 2+ pieces.")
+        if len(prom) == 1 and prom[0] is not None:
+            if prom[0] in chess.PIECE_SYMBOLS:
+                return chess.PIECE_SYMBOLS.index(prom[0])
+            if prom[0].lower() in chess.PIECE_SYMBOLS:
+                return chess.PIECE_SYMBOLS.index(prom[0].lower())
+            raise NotImplementedError(f"Unexpected promotion piece {prom[0]}.")
+        return None  # No promotion
+
     def choose_move(self, board: Board) -> chess.Move:
         geochri_board = geochri.src.chess_utils.load_chessboard_to_Geochri(board)
 
@@ -214,22 +227,10 @@ class GeochriPlayer(ChessPlayer):
             geochri_board, encoded=best_move
         )
 
-        if len(prom) > 1:
-            raise NotImplementedError(f"Unhandled promotion {prom} of 2+ pieces.")
-        if len(prom) == 1 and prom[0] is not None:
-            if prom[0] in chess.PIECE_SYMBOLS:
-                index = chess.PIECE_SYMBOLS.index(prom[0])
-                promotion_piece = chess.Piece(chess.PIECE_TYPES[index], chess.BLACK)
-            elif prom[0].lower() in chess.PIECE_SYMBOLS:
-                index = chess.PIECE_SYMBOLS.index(prom[0].lower())
-                promotion_piece = chess.Piece(chess.PIECE_TYPES[index], chess.WHITE)
-            else:
-                raise NotImplementedError(f"Unexpected promotion piece {prom[0]}.")
-        else:
-            promotion_piece = None
-
         from_square, to_square = (
             chess.parse_square(chr(pos[0][1] + ord("a")) + str(8 - pos[0][0]))
             for pos in (i_pos, f_pos)
         )
-        return chess.Move(from_square, to_square, promotion_piece)
+        move = chess.Move(from_square, to_square, self._parse_promotion(prom))
+        assert move in board.legal_moves, f"Chose invalid move {move} in board {board}."
+        return move
