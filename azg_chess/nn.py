@@ -154,7 +154,7 @@ class NNet(nn.Module):
         # NOTE: confirm this matches, as otherwise the fully-connected layers'
         # input shape would not be larger than the action size
         self._embed_func, shape = embed_func_shape
-        assert policy_channels * math.prod(shape), game.getActionSize()
+        assert policy_channels * math.prod(shape) >= game.getActionSize()
         # NOTE: leave pi as raw scores (don't apply Softmax) to directly use
         # nn.functional.cross_entropy
         self.policy_head = nn.Sequential(
