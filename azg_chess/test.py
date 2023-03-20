@@ -184,7 +184,7 @@ def outcomes_to_win_percentage(
 
 
 @dataclass
-class CoachArgs(MCTSArgs):
+class CoachArgs(MCTSArgs):  # pylint: disable=too-many-instance-attributes
     """Data structure to configure the Coach class."""
 
     # Number of training iterations
