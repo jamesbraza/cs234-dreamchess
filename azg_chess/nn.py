@@ -235,8 +235,11 @@ class NNetWrapper(NeuralNet):
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Calculate pi, V, and total loss given example data."""
         pred_pis, pred_vs = self.nnet(self.nnet.embed(*boards, device=self._device))
+        # Why cast to np.array? SEE: https://github.com/pytorch/pytorch/issues/13918
         true_pis, true_vs = (
-            torch.tensor(x, device=self._device, dtype=torch.float32)
+            torch.tensor(
+                np.array(x, dtype=float), device=self._device, dtype=torch.float32
+            )
             for x in [true_pis, true_vs]
         )
         loss_pi = nn.functional.cross_entropy(input=pred_pis, target=true_pis)
