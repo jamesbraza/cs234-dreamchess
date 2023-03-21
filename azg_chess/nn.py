@@ -123,7 +123,7 @@ class NNet(nn.Module):
         num_residual_layers: int = 19,
         policy_channels: int = 96,
         value_hidden_units: int = 64,
-        dropout_p: float = 0.8,
+        dropout_p: float = 0.2,
         embed_func_shape: tuple[
             Callable[[Board, ...], npt.NDArray[int]], tuple[int, int, int]
         ] = signed_embed_pair,
@@ -138,7 +138,7 @@ class NNet(nn.Module):
             num_residual_layers: Number of residual layers.
             policy_channels: Number of channels in the policy network.
             value_hidden_units: Number of hidden units in the value network.
-            dropout_p: Dropout percentage in the value network.
+            dropout_p: Probability of zeroing inside all Dropout layers.
             embed_func_shape: Two tuple of embedding function and its per-board
                 output shape.
         """
@@ -197,7 +197,7 @@ class NNet(nn.Module):
             Tuple of policy scores of shape (B, |A|), value in [-1, 1] of shape (B, 1).
         """
         # NOTE: this sets requires_grad = True, if not already set
-        s = self.residual_tower(boards)  # B, C, D, X, Y
+        s = self.residual_tower(boards)  # B, C, X, Y
         return self.policy_head(s), self.value_head(s)  # (B, |A|), (B, 1)
 
 
