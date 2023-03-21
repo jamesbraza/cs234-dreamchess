@@ -192,19 +192,19 @@ class GeochriPlayer(ChessPlayer):
         best_move, _ = MCTS_chess.UCT_search(
             geochri_board, num_reads=self.mcts_steps_per_move, net=self._net
         )
+
         i_pos, f_pos, prom = encoder_decoder.decode_action(
             geochri_board, encoded=best_move
         )
-
         if prom[0] is None:
             promotion_piece = None
         else:
-            if prom[0] in chess.PIECE_SYMBOLS:
+            if prom[0] in chess.PIECE_SYMBOLS and prom[0] != chess.KING:
                 index = chess.PIECE_SYMBOLS.index(prom[0])
-                promotion_piece = chess.PIECE_TYPES[index]
-            elif prom[0].lower() in chess.PIECE_SYMBOLS:
+                promotion_piece = chess.PIECE_TYPES[index-1]
+            elif prom[0].lower() in chess.PIECE_SYMBOLS and prom[0] != chess.KING:
                 index = chess.PIECE_SYMBOLS.index(prom[0].lower())
-                promotion_piece = chess.PIECE_TYPES[index]
+                promotion_piece = chess.PIECE_TYPES[index-1]
 
         from_square = chess.parse_square(chr(i_pos[0][1] + 97) + str(8 - i_pos[0][0]))
         to_square = chess.parse_square(chr(f_pos[0][1] + 97) + str(8 - f_pos[0][0]))
