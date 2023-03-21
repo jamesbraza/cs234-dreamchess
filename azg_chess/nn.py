@@ -121,8 +121,8 @@ class NNet(nn.Module):
         game: ChessGame,
         residual_channels: int = 256,
         num_residual_layers: int = 19,
-        policy_channels: int = 128,
-        value_hidden_units: int = 256,
+        policy_channels: int = 96,
+        value_hidden_units: int = 64,
         dropout_p: float = 0.8,
         embed_func_shape: tuple[
             Callable[[Board, ...], npt.NDArray[int]], tuple[int, int, int]
@@ -166,6 +166,7 @@ class NNet(nn.Module):
             nn.ReLU(),
             nn.Flatten(),
             nn.Linear(policy_hidden_channels, game.getActionSize()),
+            nn.Dropout(dropout_p),
         )
         self.value_head = nn.Sequential(
             nn.Conv2d(residual_channels, 1, kernel_size=1),
