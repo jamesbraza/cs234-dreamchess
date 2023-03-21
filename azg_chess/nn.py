@@ -29,8 +29,10 @@ def discern_gpu_mac_cpu_device() -> torch.device:
     if torch.cuda.is_available():
         return torch.device("cuda")
     if torch.backends.mps.is_available():
-        # As of 3/18/2023, nn.Conv3d was not supported on the mps backend per
-        # https://github.com/pytorch/pytorch/issues/77764
+        # As of 3/18/2023, aten::nonzero was not supported on macOS 12.6 with
+        # torch 2.0.0, and torch 1.3.1 didn't support aten::nonzero at all
+        # SEE: https://github.com/pytorch/pytorch/issues/77764
+        # SEE: https://github.com/pytorch/pytorch/commit/38de981e160732bce5d90bace0b40d63dba31bf1
         pass
     return torch.device("cpu")  # Fallback
 
