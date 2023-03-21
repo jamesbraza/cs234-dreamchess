@@ -121,7 +121,7 @@ class NNet(nn.Module):
         game: ChessGame,
         residual_channels: int = 256,
         num_residual_layers: int = 19,
-        policy_channels: int = 6,
+        policy_channels: int = 128,
         value_hidden_units: int = 256,
         dropout_p: float = 0.8,
         embed_func_shape: tuple[
@@ -132,7 +132,7 @@ class NNet(nn.Module):
         Initialize.
 
         Args:
-            game: Game, to extract action sizes and confirm board size.
+            game: Game, to extract action sizes.
             residual_channels: Number of channels in the residual layers,
                 referred to as C sometimes below.
             num_residual_layers: Number of residual layers.
