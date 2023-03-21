@@ -94,9 +94,11 @@ def conv_conversion(
 class ResidualBlock(nn.Module):
     """Basic residual block based on two Conv3d with BatchNorm3ds."""
 
+    DEFAULT_CONV_KWARGS = {"kernel_size": 3, "padding": 1, "bias": False, "stride": 1}
+
     def __init__(self, in_channels: int, out_channels: int, **conv_kwargs):
         super().__init__()
-        conv_kwargs = {"kernel_size": 3, "padding": 1} | conv_kwargs
+        conv_kwargs = self.DEFAULT_CONV_KWARGS | conv_kwargs
         self.non_residual = nn.Sequential(
             nn.Conv3d(in_channels, out_channels, **conv_kwargs),
             nn.BatchNorm3d(out_channels),
@@ -115,7 +117,8 @@ class NNet(nn.Module):
     def __init__(
         self,
         game: ChessGame,
-        num_channels: int = 64,
+        residual_channels: int = 64,
+        value_hidden_units: int = 128,
         dropout_p: float = 0.8,
         embed_func_shape: tuple[
             Callable[[Board, ...], npt.NDArray[int]], tuple[int, int, int]
@@ -126,27 +129,31 @@ class NNet(nn.Module):
 
         Args:
             game: Game, to extract action sizes and confirm board size.
-            num_channels: Number of channels for beginning Conv3d's.
+            residual_channels: Number of channels in the residual layers,
+                referred to as C sometimes below.
+            value_hidden_units: Number of hidden units in the value network.
             dropout_p: Dropout percentage.
             embed_func_shape: Two tuple of embedding function and its per-board
                 output shape.
         """
         super().__init__()
-        self.conv_layers = nn.Sequential(
-            nn.Conv3d(1, num_channels, 3, padding="same"),
-            nn.BatchNorm3d(num_channels),
+        self.residual_tower = nn.Sequential(
+            nn.Conv3d(1, residual_channels, kernel_size=3, padding=1),
+            nn.BatchNorm3d(residual_channels),
             nn.ReLU(),
-            ResidualBlock(num_channels, num_channels),
-            ResidualBlock(num_channels, num_channels),
-            nn.Conv3d(num_channels, num_channels, 3),
-            nn.BatchNorm3d(num_channels),
+            ResidualBlock(residual_channels, residual_channels),
+            ResidualBlock(residual_channels, residual_channels),
+            nn.Conv3d(residual_channels, residual_channels, kernel_size=3),
+            nn.BatchNorm3d(residual_channels),
             nn.ReLU(),
         )
         self._embed_func, shape = embed_func_shape
         # NOTE: confirm this matches, as otherwise the fully-connected layers'
         # input shape would not be correct
         assert game.getBoardSize() == shape[1:]
-        self._fc_layers_in_shape = num_channels * math.prod(conv_conversion(shape, 3))
+        self._fc_layers_in_shape = residual_channels * math.prod(
+            conv_conversion(shape, kernel_size=3)
+        )
         self.fc_layers = nn.Sequential(
             nn.Flatten(),
             nn.Linear(self._fc_layers_in_shape, game.getActionSize()),
@@ -158,11 +165,11 @@ class NNet(nn.Module):
         # nn.functional.cross_entropy
         self.policy_head = nn.Linear(game.getActionSize(), game.getActionSize())
         self.value_head = nn.Sequential(
-            nn.Linear(game.getActionSize(), 128),
-            nn.BatchNorm1d(128),
+            nn.Linear(game.getActionSize(), value_hidden_units),
+            nn.BatchNorm1d(value_hidden_units),
             nn.Dropout(dropout_p),  # Apply before ReLU, for computational efficiency
             nn.ReLU(),
-            nn.Linear(128, 1),
+            nn.Linear(value_hidden_units, 1),
             nn.Tanh(),
         )
 
@@ -184,7 +191,7 @@ class NNet(nn.Module):
         """
         s = boards.unsqueeze(1)  # B, 1, D, X, Y
         # NOTE: this sets requires_grad = True, if not already set
-        s = self.conv_layers(s)  # B, C, D - 2 * 2, X - 2 * 2, Y - 2 * 2
+        s = self.residual_tower(s)  # B, C, D - 2 * 2, X - 2 * 2, Y - 2 * 2
         s = self.fc_layers(s)  # B, |A|
         return self.policy_head(s), self.value_head(s)  # (B, |A|), (B, 1)
 
