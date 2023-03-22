@@ -115,8 +115,7 @@ pre-commit install
 
 I launched several AWS
 Deep Learning AMI GPU PyTorch 1.13.1 (Ubuntu 20.04) 20230315's
-with instance type t2.micro (free tier).
-Here's how they were configured:
+with instance type `t2.2xlarge`.  Here's how they were configured:
 
 ```console
 > source activate pytorch
@@ -151,7 +150,8 @@ python -m pip install -r requirements.txt --progress-bar off \
 ```
 
 Note the `torch==1.13.1+cpu -f https://download.pytorch.org/whl/torch_stable.html`
-trick installs a CPU-only version of PyTorch 1.13.1 (since this AMI has no GPU).
+trick installs a CPU-only version of PyTorch 1.13.1
+(since `t2.2xlarge` has no GPU).
 
 I didn't want to use PyTorch 2.0 since it was released this week,
 and likely has some bugs.
