@@ -1,0 +1,25 @@
+---
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: 'DreamChess: RL for Chess Play'
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: James
+    family-names: Braza
+    email: jamesbraza@stanford.edu
+    orcid: 'https://orcid.org/0000-0002-1444-5313'
+    affiliation: Stanford University School of Engineering
+repository-code: 'https://github.com/jamesbraza/cs234-dreamchess'
+abstract: >-
+  AlphaGo Zero-style reinforcement learning implementation
+  for standard chess.
+keywords:
+  - chess
+  - reinforcement learning
+  - AlphaGo Zero
+license: MIT
